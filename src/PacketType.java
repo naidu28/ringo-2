@@ -1,9 +1,10 @@
 public enum PacketType {
-    SYN,
-    ACK,
     LSA,
+    LSA_COMPLETE,
     RTT,
+    RTT_COMPLETE,
     KEEPALIVE,
     DATA,
-    PING
+    PING_REQ,
+    PING_RES,
 }

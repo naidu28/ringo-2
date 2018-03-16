@@ -125,11 +125,37 @@ public class RingoPacket implements java.io.Serializable {
 		return this.stopTime;
 	}
 
-    
     public byte[] getPayload() {
         return payload;
     }
-
+    
+    public boolean equals(Object other) {
+    		if (other instanceof RingoPacket) {
+    			RingoPacket packet = (RingoPacket) other;
+    			return this.getSourceIP().equals(packet.getSourceIP()) && this.getDestIP().equals(packet.getDestIP()) && this.getSourcePort() == packet.getSourcePort() && this.getDestPort() == packet.getDestPort() && this.getType() == packet.getType() && this.getSequenceNumber() == packet.getSequenceNumber();
+    		} else {
+    			return false;
+    		}
+    }
+    
+    public void replace(RingoPacket packet) {
+    		this.sourceIP = packet.getSourceIP();
+    		this.sourcePort = packet.getSourcePort();
+    		this.destIP = packet.getDestIP();
+    		this.destPort = packet.getDestPort();
+    		this.packetLength = packet.getPacketLength();
+    		this.sequenceNumber = packet.getSequenceNumber();
+    		this.type = packet.getType();
+    		this.role = packet.getRole();
+    		this.lsa = packet.getLsa();
+    		this.rtt = packet.getRtt();
+    		this.rttIndex = packet.getRttIndex();
+    		this.indexRtt = packet.getIndexRtt();
+    		this.startTime = packet.getStartTime();
+    		this.stopTime = packet.getStopTime();
+    		this.payload = packet.getPayload();
+    }
+    
     public static RingoPacket generateDatagram(
             String sendToIP,
             short sendToPort,
