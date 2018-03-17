@@ -30,7 +30,7 @@ public class RingoPacket implements java.io.Serializable {
      * packet, but not any meta-information
      * @param basepacket Raw UDP Packet with valid payload
      */
-    public RingoPacket(String sourceIP, int sourcePort, String destIP, int destPort, int packetLength, int seqNum, PacketType type, Role role) {
+    public RingoPacket(String sourceIP, int sourcePort, String destIP, int destPort, int packetLength, int seqNum, PacketType type, Role role, int ringSize) {
         // TODO:
     		this.sourceIP = sourceIP;
     		this.sourcePort = sourcePort;
@@ -41,6 +41,12 @@ public class RingoPacket implements java.io.Serializable {
     		this.type = type;
     		this.role = role;
     		this.lsa = new Hashtable<String, Integer>();
+    		this.rtt = new long[ringSize][ringSize];
+    		for (int i = 0; i < ringSize; i++) {
+    			for (int j = 0; j < ringSize; j++) {
+    				this.rtt[i][j] = -1;
+    			}
+    		}
     		this.rttIndex = new Hashtable<String, Integer>();
     		this.indexRtt = new Hashtable<Integer, String>();
     }
@@ -173,6 +179,6 @@ public class RingoPacket implements java.io.Serializable {
     }
     
     public String toString() {
-    		return "source: " + this.sourceIP + ":" + this.sourcePort + "\n" + "destination: " + this.destIP + ":" + this.destPort;
+    		return "source: " + this.sourceIP + ":" + this.sourcePort + "\n" + "destination: " + this.destIP + ":" + this.destPort + "\ntype: " + this.getType() + "\n";
     }
 }
