@@ -1,4 +1,3 @@
-import java.net.DatagramPacket;
 import java.util.Hashtable;
 
 public class RingoPacket implements java.io.Serializable {

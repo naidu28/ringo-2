@@ -11,8 +11,10 @@ public class App {
     			role = Role.FORWARDER;
     		}
     		
-    		System.out.println("I've gotten this far");
     		Thread ringoThread = new Thread(new Ringo(role, Integer.parseInt(args[1]), args[2], Integer.parseInt(args[3]), Integer.parseInt(args[4])));
     		ringoThread.start();
+    		while (ringoThread.isAlive()) {}
+    		
+    		System.exit(0);
     }
 }

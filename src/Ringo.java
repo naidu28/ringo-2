@@ -1,7 +1,5 @@
 import java.net.DatagramSocket;
 import java.net.DatagramPacket;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.net.SocketException;
 import java.net.InetAddress;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -9,14 +7,24 @@ import java.io.ByteArrayOutputStream;
 import java.io.ObjectOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ObjectInputStream;
-import java.util.Base64;
 import java.util.Hashtable;
 import java.util.HashSet;
+import java.util.Set;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.lang.Thread;
+import java.util.Scanner;
 
 import java.io.IOException;
 
+/*
+ * The Ringo class represents a network node on the Ringo network.
+ * It runs in a child thread of the main process, which belongs to App.java.
+ * It's main functions are: providing a user interface, managing child threads
+ * to coordinate network input and network output, and keeping connections with
+ * it's peers alive. It is essentially the backbone of the Ringo protocol.
+ * 
+ */
 public class Ringo implements Runnable {
 	DatagramSocket socket;
 	private final Role role;
@@ -33,6 +41,10 @@ public class Ringo implements Runnable {
 	private LinkedBlockingQueue<RingoPacket> recvQueue;
 	private LinkedBlockingQueue<RingoPacket> sendQueue;
 
+	/*
+	 * The constructor accepts all of the command-line arguments specified in the
+	 * reference material
+	 */
 	public Ringo(Role role, int localPort, String pocName, int pocPort, int ringSize) {
 		this.role = role;
 		this.localName = "";
@@ -50,7 +62,6 @@ public class Ringo implements Runnable {
 		}
 		this.pocPort = pocPort;
 		this.ringSize = ringSize;
-		// hostname, port
 		this.lsa = new Hashtable<String, Integer>();
 		this.rttIndex = new Hashtable<String, Integer>();
 		this.indexRtt = new Hashtable<Integer, String>();
@@ -63,15 +74,9 @@ public class Ringo implements Runnable {
 		this.recvQueue = new LinkedBlockingQueue<RingoPacket>();
 		this.sendQueue = new LinkedBlockingQueue<RingoPacket>();
 
-		/*try {
-			this.lsa.put(InetAddress.getLocalHost().getHostName()+":"+this.localPort, 1);
-		} catch (Exception e) { }*/
-
-		System.out.println("poc port: " +this.pocPort);
 
 		try {
 			this.socket = new DatagramSocket(this.localPort);
-			System.out.println(this.socket);
 		} catch(SocketException e) {
 			// handle this later
 		}
@@ -126,7 +131,6 @@ public class Ringo implements Runnable {
 	}
 
 	public void run() {
-		System.out.println("hey");
 		LinkedBlockingQueue<RingoPacket> recvQueue = this.recvQueue;
 		LinkedBlockingQueue<RingoPacket> sendQueue = this.sendQueue;
 
@@ -134,32 +138,103 @@ public class Ringo implements Runnable {
 		Thread netOut = new Thread(new SenderThread(sendQueue));
 		netIn.start();
 		netOut.start();
-
+		
+		if (this.pocName != "0" && this.pocPort != 0) {
+			RingoPacket responseIn = null;
+			RingoPacket packet = new RingoPacket(this.localName, this.localPort, this.pocName, this.pocPort, 0, 0, PacketType.PING_REQ, this.role, this.ringSize);
+			sendQueue.add(packet);
+			responseIn = this.takeType(recvQueue, PacketType.PING_RES);
+			if (responseIn == null) {
+				System.out.println("\nPoint of contact not reachable currently. Continuing to attempt connection...");
+			}
+			
+			while(responseIn == null) {
+				packet = new RingoPacket(this.localName, this.localPort, this.pocName, this.pocPort, 0, 0, PacketType.PING_REQ, this.role, this.ringSize);
+				sendQueue.add(packet);
+				responseIn = this.takeType(recvQueue, PacketType.PING_RES);
+			}
+		}
+		
+		System.out.println("\nStarting peer discovery...");
 		peerDiscovery(recvQueue, sendQueue);
 		try {
 			Thread.sleep(500);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		System.out.println("Peer discovery complete!\n");
 		flushType(recvQueue, PacketType.LSA);
 		flushType(recvQueue, PacketType.LSA_COMPLETE);
-		System.out.println("I think I made it here");
+		System.out.println("Starting RTT Vector creation...");
 		rttVectorGeneration(recvQueue, sendQueue);
-		flushType(recvQueue, PacketType.PING_REQ);
+		/*try {
+			Thread.sleep(3000);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}*/
+		System.out.println("RTT Vector creation complete!\n");
+		flushType(recvQueue, PacketType.LSA);
+		flushType(recvQueue, PacketType.LSA_COMPLETE);
 		flushType(recvQueue, PacketType.PING_RES);
 		flushType(recvQueue, PacketType.PING_COMPLETE);
-		System.out.println(this.rttIndex);
-		// rttConvergence(recvQueue, sendQueue);
-
-		while(true) {
-			for (int i = 0; i < this.rtt.length; i++) {
-				for (int j = 0; j < this.rtt.length; j++) {
-					System.out.print(" " + this.rtt[i][j]);
-				}
-				System.out.println();
-			}
+		try {
+			Thread.sleep(3000);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		flushType(recvQueue, PacketType.PING_RES);
+		flushType(recvQueue, PacketType.PING_COMPLETE);
+		System.out.println("Starting RTT Matrix convergence...");
+		rttConvergence(recvQueue, sendQueue);
+		try {
+			Thread.sleep(3000);
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 
+		System.out.println("RTT Matrix convergence complete!");
+		System.out.println("Network is ready to use.\n");
+		Scanner scanner = new Scanner(System.in);
+
+		while (true) {
+			System.out.println("Enter any of the following commands: show-matrix, show-ring, disconnect");
+			String input = scanner.nextLine();
+			if (input.equalsIgnoreCase("show-matrix")) {
+				System.out.println("\nlegend (maps index to host for columns and rows): \n");
+				for (int i = 0; i < ringSize; i++) {
+					System.out.println("\t" +i+ ": " +this.indexRtt.get(i));
+				}
+
+				System.out.println("\t");
+
+				for (int i = 0; i < this.rtt.length; i++) {
+					for (int j = 0; j < this.rtt.length; j++) {
+						System.out.print("\t" +this.rtt[i][j]+" ");
+					}
+					System.out.println("");
+				}
+				System.out.println("\n");
+			} else if (input.equalsIgnoreCase("show-ring")) {
+				ArrayList<String> output = generateOptimalRing();
+
+				System.out.println("\t");
+
+				for (int i = 0; i < output.size(); i++) {
+					if (i != output.size() - 1)
+						System.out.print(output.get(i)+" -> ");
+					else
+						System.out.println(output.get(i));
+				}
+				System.out.println("");
+			} else if (input.equalsIgnoreCase("disconnect")) {
+				netIn.interrupt();
+				netOut.interrupt();
+				scanner.close();
+				return;
+			} else {
+				System.out.println("Sorry, but your input was invalid. Try again.");
+			}
+		}
 		// System.out.println(this.lsa);
 	}
 
@@ -169,7 +244,6 @@ public class Ringo implements Runnable {
 		if (this.lsa.size() < ringSize) {
 			converged.put(this.localName+":"+this.localPort, false);
 		} else {
-			System.out.println("is some code touching this spot");
 			converged.put(this.localName+":"+this.localPort, true);
 		}
 
@@ -213,7 +287,6 @@ public class Ringo implements Runnable {
 						sendQueue.add(response);
 					}
 
-					System.out.println("size of recvqueue: " +recvQueue.size());
 				} catch (Exception e) {
 					// handle later
 					System.out.println("this exception is e: " +e);
@@ -250,23 +323,16 @@ public class Ringo implements Runnable {
 				}
 			}
 		}
-
-		System.out.println("3");
-
-		System.out.println("who da fuck are you");
 	}
 
 	private boolean isLsaConverged(Hashtable<String, Boolean> converged) {
 		if (this.lsa.size() >= ringSize) {
-			System.out.println("size of my lsa: " +this.lsa.size());
-			System.out.println("my lsa: " +this.lsa);
 			converged.put(this.localName+":"+this.localPort, true);
 		} else {
 			return false;
 		}
 
 		Iterator iter = this.lsa.keySet().iterator();
-		System.out.println(converged);
 
 		while (iter.hasNext()) {
 			String key = (String) iter.next();
@@ -297,146 +363,75 @@ public class Ringo implements Runnable {
 
 		// ping requests
 		//while (!converged.containsAll(this.lsa.keySet())) {
-			while(!isRttVectorConverged()) {
-				// send packets to all nodes
-				Iterator iter = this.lsa.keySet().iterator();
+		while(!isRttVectorConverged()) {
+			// send packets to all nodes
+			Iterator iter = this.lsa.keySet().iterator();
 
-				while (iter.hasNext()) {
-					String key = (String) iter.next();
-					//System.out.println("rttIndex: " +this.rttIndex);
-					if (!this.rttIndex.containsKey(key) && !key.equals(localkey)) {
-						RingoPacket requestOut = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.PING_REQ, this.role, this.ringSize);
-						sendQueue.add(requestOut);
+			while (iter.hasNext()) {
+				String key = (String) iter.next();
+				//System.out.println("rttIndex: " +this.rttIndex);
+				if (!this.rttIndex.containsKey(key) && !key.equals(localkey)) {
+					RingoPacket requestOut = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.PING_REQ, this.role, this.ringSize);
+					sendQueue.add(requestOut);
 
-						RingoPacket responseIn = null;
-						responseIn = takeType(recvQueue, PacketType.PING_RES);
+					RingoPacket responseIn = null;
+					responseIn = takeType(recvQueue, PacketType.PING_RES);
 
-						System.out.println("rtt index: " +this.rttIndex);
-						System.out.println(recvQueue);
-
-						if (responseIn != null && !this.rttIndex.containsKey(responseIn.getSourceIP()+":"+responseIn.getSourcePort())) {
-							System.out.println("we're adding this new thing");
-							System.out.println("rtt index: " +this.rttIndex);
-							assignRtt(responseIn, n, responseIn.getStopTime() - responseIn.getStartTime());
-							n++;
-						}
-						//System.out.println(sendQueue);
+					if (responseIn != null && !this.rttIndex.containsKey(responseIn.getSourceIP()+":"+responseIn.getSourcePort())) {
+						assignRtt(responseIn, n, responseIn.getStopTime() - responseIn.getStartTime());
+						n++;
 					}
+					//System.out.println(sendQueue);
 				}
-			}
-		//}
-			converged.add(this.localName+":"+this.localPort);
-			
-			/*while (!converged.containsAll(this.lsa.keySet())) {
-				Iterator iter = this.lsa.keySet().iterator();
-				while (iter.hasNext()) {
-					String key = (String) iter.next();
-					if (!converged.contains(key) && !key.equals(localkey)) {
-						RingoPacket request = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.PING_COMPLETE, this.role, this.ringSize);
-						sendQueue.add(request);
-					}
-				}
-				
+
 				try {
-					Thread.sleep(500);
+					Thread.sleep(200);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
-				
-				RingoPacket response = takeType(recvQueue, PacketType.PING_COMPLETE);
-				if (response != null && !converged.contains(response.getSourceIP()+":"+response.getSourcePort())) {
-					converged.add(response.getSourceIP()+":"+response.getSourcePort());
-				}
-			}*/
-			// receive one response
-			/*boolean receivedReq = false;
-			boolean receivedRes = false;
-
-			RingoPacket responseIn = null;
-
-			while (responseIn == null) {
-				responseIn = takeType(recvQueue, PacketType.PING_RES);
-				while (responseIn != null && this.rttIndex.containsKey(responseIn.getSourceIP()+":"+responseIn.getSourcePort())) {
-					break;
-				}
 			}
+		}
 
-			System.out.println("general response location " + responseIn.toString() + "\n");
-			if (!this.rttIndex.containsKey(responseIn.getSourceIP()+":"+responseIn.getSourcePort())) {
-				// System.out.println("new response location " + responseIn.toString());
-				// System.out.println("ping time: " +(responseIn.getStopTime() - responseIn.getStartTime()));
-				// System.out.println();
-				assignRtt(responseIn, n, responseIn.getStopTime() - responseIn.getStartTime());
-				n++;
-			}*/
-				/*RingoPacket requestIn = takeType(recvQueue, PacketType.PING_REQ);
+		converged.add(localkey);
 
-				if (requestIn != null) {
-					if (!rttIndex.contains(responseIn.getSourceIP()+":"+responseIn.getSourcePort())) {
-						assignRtt(responseIn, n, responseIn.getStopTime() - responseIn.getStartTime());
-						System.out.println("received: " +rttIndex);
-						receivedRe = true;
-					}
-				}*/
+		while(!converged.containsAll(this.lsa.keySet())) {
+			Iterator iter = this.lsa.keySet().iterator();
 
-			// receive one request
-			// respond to one request
-
-		/*while (i < ringSize - 1) {
-			boolean isReceived = false;
-
-			while(!isReceived) {
-				RingoPacket responseIn = takeType(recvQueue, PacketType.PING_RES);
-
-				// System.out.println("response in source: " + responseIn.getSourceIP());
-				if (responseIn != null) {
-					if (!received.contains(responseIn.getSourceIP()+":"+responseIn.getSourcePort())) {
-						assignRtt(responseIn, n, responseIn.getStopTime() - responseIn.getStartTime());
-						received.add(responseIn.getSourceIP()+":"+responseIn.getSourcePort());
-						System.out.println("received: " +received);
-						i++;
-						isReceived = true;
-					}
-				}
-
-				Iterator iter = this.lsa.keySet().iterator();
-
-				while (iter.hasNext()) {
-					String key = (String) iter.next();
-					if (!received.contains(key)) {
-						if (!key.equals(localkey)) {
-							RingoPacket requestOut = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.PING_REQ, this.role);
-							sendQueue.add(requestOut);
-						}
-					}
-				}
-			}
-		}*/
-			/*
-			while () {
+			while (iter.hasNext()) {
 				String key = (String) iter.next();
+				RingoPacket request = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.PING_COMPLETE, this.role, this.ringSize);
+				sendQueue.add(request);
 
-				if (!key.equals(localkey)) {
-					RingoPacket requestOut = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.PING_REQ, this.role);
-					sendQueue.add(requestOut);
-					RingoPacket responseIn = null;
-					RingoPacket requestIn = null;
-					while (responseIn == null || requestIn == null) {
-						responseIn = takeType(recvQueue, PacketType.PING_RES);
-						requestIn = takeType(recvQueue, PacketType.PING_REQ);
+				if (!key.equals(localkey) && !converged.contains(key)) {
+					RingoPacket response = null;
+					response = takeType(recvQueue, PacketType.PING_COMPLETE);
+					if (response != null && !converged.contains(response.getSourceIP()+":"+response.getSourcePort())) {
+						converged.add(response.getSourceIP()+":"+response.getSourcePort());
 					}
-
-					//System.out.println("start time: " +requestOut.getStartTime());
-					//System.out.println("stop time: " +responseIn.getStopTime());
-					//System.out.println("time difference: " + (responseIn.getStopTime() - requestOut.getStartTime()));
-					assignRtt(responseIn, n, responseIn.getStopTime() - requestOut.getStartTime());
-					//System.out.println("6");
-					n++;
-
-					RingoPacket responseOut = new RingoPacket(this.localName, this.localPort, requestIn.getSourceIP(), requestIn.getSourcePort(), 0, 0, PacketType.PING_RES, this.role);
-					sendQueue.add(responseOut);
 				}
-			}*/
+
+				/*try {
+					Thread.sleep(200);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}*/
+			}
+		}
+
+		for (int i = 0; i < 5; i++) {
+			Iterator iter = this.lsa.keySet().iterator();
+
+			while (iter.hasNext()) {
+				String key = (String) iter.next();
+				RingoPacket request = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.PING_COMPLETE, this.role, this.ringSize);
+				sendQueue.add(request);
+			}
+			try {
+				Thread.sleep(200);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
 	}
 
 
@@ -468,32 +463,64 @@ public class Ringo implements Runnable {
 	}
 
 	private void rttConvergence(LinkedBlockingQueue<RingoPacket> recvQueue, LinkedBlockingQueue<RingoPacket> sendQueue) {
-		//Hashtable<String, Boolean> encountered = new Hashtable<String, Boolean>();
+		HashSet<String> converged = new HashSet<String>();
+		String localkey = this.localName+":"+this.localPort;
+
+		HashSet<String> addedToMatrix = new HashSet<String>();
+		addedToMatrix.add(this.localName+":"+this.localPort);
+
 		while (!isRttConverged()) {
 			Iterator iter = this.lsa.keySet().iterator();
 
 			while (iter.hasNext()) {
 				String key = (String) iter.next();
 
-				if (!key.equals(this.localName+":"+this.localPort)) {
+				if (!key.equals(this.localName+":"+this.localPort) && !addedToMatrix.contains(key)) {
 					RingoPacket requestOut = new RingoPacket(Ringo.this.localName, Ringo.this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.RTT_REQ, Ringo.this.role, this.ringSize);
 					sendQueue.add(requestOut);
+
+					//System.out.println("rtt index: " +this.rttIndex);
 
 					RingoPacket responseIn = null;
 					responseIn = takeType(recvQueue, PacketType.RTT_RES);
 
-					//System.out.println("rtt index: " +this.rttIndex);
-					//System.out.println(recvQueue);
-					try {
-						Thread.sleep(200);
-					} catch (Exception e) {
-						e.printStackTrace();
-					}
-
-					if (responseIn != null) {
+					if (responseIn != null && !addedToMatrix.contains(responseIn.getSourceIP()+":"+responseIn.getSourcePort())) {
 						addRttVectorToMatrix(responseIn);
+						addedToMatrix.add(responseIn.getSourceIP()+":"+responseIn.getSourcePort());
 					}
 				}
+
+				try {
+					Thread.sleep(400);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
+
+		converged.add(localkey);
+
+		while(!converged.containsAll(this.lsa.keySet())) {
+			Iterator iter = this.lsa.keySet().iterator();
+
+			while (iter.hasNext()) {
+				String key = (String) iter.next();
+				RingoPacket request = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.RTT_COMPLETE, this.role, this.ringSize);
+				sendQueue.add(request);
+
+				if (!key.equals(localkey) && !converged.contains(key)) {
+					RingoPacket response = null;
+					response = takeType(recvQueue, PacketType.RTT_COMPLETE);
+					if (response != null && !converged.contains(response.getSourceIP()+":"+response.getSourcePort())) {
+						converged.add(response.getSourceIP()+":"+response.getSourcePort());
+					}
+				}
+
+				/*try {
+					Thread.sleep(200);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}*/
 			}
 		}
 	}
@@ -522,14 +549,13 @@ public class Ringo implements Runnable {
 			if (otherKey == null) {
 				return;
 			}
-			
+
 			long rttVal = packetRtt[0][i];
-			System.out.println("this packet's key index: " +this.rttIndex.get(packetKey));
-			System.out.println("other packet's key index: " +otherKey);
 			this.rtt[this.rttIndex.get(packetKey)][this.rttIndex.get(otherKey)] = rttVal;
 		}
+
 	}
-	
+
 	private void flushType(LinkedBlockingQueue<RingoPacket> queue, PacketType type) {
 		Iterator iter = queue.iterator();
 
@@ -548,11 +574,103 @@ public class Ringo implements Runnable {
 			RingoPacket packet = (RingoPacket) iter.next();
 			if (packet.getType() == type) {
 				iter.remove();
+				return packet;
 			}
-			return packet;
 		}
 
 		return null;
+	}
+
+	private RingoPacket takeSpecific(LinkedBlockingQueue<RingoPacket> queue, PacketType type, String hostname, int port) {
+		Iterator iter = queue.iterator();
+
+		while (iter.hasNext()) {
+			RingoPacket packet = (RingoPacket) iter.next();
+			if (packet.getType() == type && packet.getSourceIP().equals(hostname) && packet.getSourcePort() == port) {
+				iter.remove();
+				return packet;
+			}
+		}
+
+		return null;
+	}
+
+	public ArrayList<String> generateOptimalRing() {
+		Iterator iter = this.lsa.keySet().iterator();
+		ArrayList<Long> currRoute = new ArrayList<Long>();
+		ArrayList<Long> minRoute = new ArrayList<Long>();
+
+		while (iter.hasNext()) {
+			String start = (String) iter.next();
+			Set<String> unvisited = new HashSet<String>(this.lsa.keySet());
+			Set<String> visited = new HashSet<String>();
+			currRoute = recurseNetwork(start, unvisited, visited);
+
+			if (minRoute.size() > 0) {
+				if (currRoute.get(0) < minRoute.get(0)) {
+					minRoute = currRoute;
+				}
+			} else {
+				minRoute = currRoute;
+			}
+		}
+
+		ArrayList<String> toReturn = new ArrayList<String>();
+
+		for (int i = 1; i < minRoute.size(); i++) {
+			toReturn.add(this.indexRtt.get(minRoute.get(i).intValue()));
+		}
+		return toReturn;
+	}
+
+	private ArrayList<Long> recurseNetwork(String curr, Set<String> unvisited, Set<String> visited) {
+		ArrayList<ArrayList<Long>> paths = new ArrayList<ArrayList<Long>>();
+		long currIndex = (long) this.rttIndex.get(curr);
+		visited.add(curr);
+
+		/*if (unvisited.isEmpty()) {
+			System.out.println("made it");
+			ArrayList<Long> toReturn = new ArrayList<Long>();
+			toReturn.add((long) 0);
+			return toReturn;
+		}*/
+
+		if (visited.size() == unvisited.size()) {
+			ArrayList<Long> toReturn = new ArrayList<Long>();
+			toReturn.add((long) 0);
+			toReturn.add(currIndex);
+			return toReturn;
+		}
+
+		Iterator iter = unvisited.iterator();
+
+		// remove curr from unvisited nodes and brute-force search at every neighbor
+		while (iter.hasNext()) {
+			String neighbor = (String) iter.next();
+
+			if (!visited.contains(neighbor)) {
+				//System.out.println("gotta recurse");
+				ArrayList<Long> path = recurseNetwork(neighbor, unvisited, visited);
+				paths.add(path);
+			}
+		}
+
+		//System.out.println(paths);
+		ArrayList<Long> minPath = paths.get(0);
+
+		for (int i = 1; i < paths.size(); i++) {
+			if (paths.get(i).get(0) < minPath.get(0)) {
+				minPath = paths.get(i);
+			}
+		}
+
+		long prevIndex = minPath.get(minPath.size() - 1);
+		long rtt = this.rtt[(int) currIndex][(int) prevIndex];
+		minPath.set(0, minPath.get(0) + rtt);
+		minPath.add(currIndex);
+
+		return minPath;
+
 	}
 
 	private class ReceiverThread implements Runnable {
@@ -594,7 +712,7 @@ public class Ringo implements Runnable {
 					//System.out.println("this is the response I'm returning back boys " +responseOut);
 					Ringo.this.sendQueue.add(responseOut);
 				} else if (packet.getType() == PacketType.RTT_REQ){
-					RingoPacket responseOut = new RingoPacket(Ringo.this.localName, Ringo.this.localPort, packet.getSourceIP(), packet.getSourcePort(), 0, 0, PacketType.PING_RES, Ringo.this.role, Ringo.this.ringSize);
+					RingoPacket responseOut = new RingoPacket(Ringo.this.localName, Ringo.this.localPort, packet.getSourceIP(), packet.getSourcePort(), 0, 0, PacketType.RTT_RES, Ringo.this.role, Ringo.this.ringSize);
 					responseOut.setRtt(Ringo.this.rtt);
 					responseOut.setRttIndex(Ringo.this.rttIndex);
 					responseOut.setIndexRtt(Ringo.this.indexRtt);
