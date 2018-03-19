@@ -1,5 +1,17 @@
 import java.util.Hashtable;
 
+/**
+ * All network communications on the Ringo protocol use
+ * the RingoPacket class to store, send, and receive information.
+ * This packet implements interface "Serializable" to allow
+ * it to be byte-encoded and effectively stored in the data
+ * buffer of a UDP/Datagram packet wrapper.
+ * 
+ * All headers for a RingoPacket are specified as class fields.
+ * 
+ * @author sainaidu
+ * @author andrewray
+ */
 public class RingoPacket implements java.io.Serializable {
 
     public static final int MAX_PAYLOAD_SIZE = 512;
@@ -159,22 +171,6 @@ public class RingoPacket implements java.io.Serializable {
     		this.startTime = packet.getStartTime();
     		this.stopTime = packet.getStopTime();
     		this.payload = packet.getPayload();
-    }
-    
-    public static RingoPacket generateDatagram(
-            String sendToIP,
-            short sendToPort,
-            String sourceIP,
-            short sourcePort,
-            String destIP,
-            short destPort,
-            short packetLength,
-            short sequenceNumber,
-            PacketType type,
-            Role role,
-            byte[] payload
-    ) {
-        return null;
     }
     
     public String toString() {

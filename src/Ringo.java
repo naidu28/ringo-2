@@ -17,13 +17,15 @@ import java.util.Scanner;
 
 import java.io.IOException;
 
-/*
+/**
  * The Ringo class represents a network node on the Ringo network.
  * It runs in a child thread of the main process, which belongs to App.java.
  * It's main functions are: providing a user interface, managing child threads
  * to coordinate network input and network output, and keeping connections with
  * it's peers alive. It is essentially the backbone of the Ringo protocol.
  * 
+ * @author sainaidu
+ * @author andrewray
  */
 public class Ringo implements Runnable {
 	DatagramSocket socket;
@@ -41,7 +43,7 @@ public class Ringo implements Runnable {
 	private LinkedBlockingQueue<RingoPacket> recvQueue;
 	private LinkedBlockingQueue<RingoPacket> sendQueue;
 
-	/*
+	/**
 	 * The constructor accepts all of the command-line arguments specified in the
 	 * reference material
 	 */
@@ -82,20 +84,14 @@ public class Ringo implements Runnable {
 		}
 	}
 
-	public Ringo(Role role, int localPort, int ringSize) {
-		this.role = role;
-		this.localPort = localPort;
-		this.ringSize = ringSize;
-
-		this.pocName = "";
-		this.pocPort = -1;
-		try {
-			this.socket = new DatagramSocket(this.localPort);
-		} catch(SocketException e) {
-			// handle this
-		}
-	}
-
+	/**
+	 * Serialization is the process of converting a Java object into
+	 * bytecode. This is necessary for us to send Java objects over
+	 * the network.
+	 * 
+	 * @param obj - serializable object (in this project, only RingoPacket)
+	 * @return byte [] - bytecode representation of the object
+	 */
 	public byte [] serialize(Object obj) {
 		ByteArrayOutputStream bo = new ByteArrayOutputStream();
 		byte [] serializedObj = null;
@@ -112,6 +108,14 @@ public class Ringo implements Runnable {
 		return serializedObj;
 	}
 
+	/**
+	 * Deserialization is the process of converting a segment of
+	 * serialized bytecode into a valid Java object. This is the 
+	 * reverse of the serialization process.
+	 * 
+	 * @param b [] - bytecode representation of the object obj - 
+	 * @return RingoPacket - deserialized object (in this project, only RingoPacket)
+	 */
 	public RingoPacket deserialize(byte [] b) {
 		RingoPacket obj = null;
 		for (int i = 1180; i < 1190; i++) {
@@ -130,6 +134,18 @@ public class Ringo implements Runnable {
 		return obj;
 	}
 
+	/**
+	 * This function is the first step in thread execution.
+	 * 
+	 * Since this class is used as a Thread, when it is instantiated
+	 * it immediately invokes this function.
+	 * 
+	 * This function acts as the initializer for this Ringo's network
+	 * activities and contains the logic for the user interface.
+	 * 
+	 * It is the single-point-of-failure in this class and is thus
+	 * the "most important" function overall.
+	 */
 	public void run() {
 		LinkedBlockingQueue<RingoPacket> recvQueue = this.recvQueue;
 		LinkedBlockingQueue<RingoPacket> sendQueue = this.sendQueue;
@@ -155,6 +171,9 @@ public class Ringo implements Runnable {
 			}
 		}
 		
+		recvQueue.clear();
+		sendQueue.clear();
+		
 		System.out.println("\nStarting peer discovery...");
 		peerDiscovery(recvQueue, sendQueue);
 		try {
@@ -167,11 +186,11 @@ public class Ringo implements Runnable {
 		flushType(recvQueue, PacketType.LSA_COMPLETE);
 		System.out.println("Starting RTT Vector creation...");
 		rttVectorGeneration(recvQueue, sendQueue);
-		/*try {
+		try {
 			Thread.sleep(3000);
 		} catch (Exception e) {
 			e.printStackTrace();
-		}*/
+		}
 		System.out.println("RTT Vector creation complete!\n");
 		flushType(recvQueue, PacketType.LSA);
 		flushType(recvQueue, PacketType.LSA_COMPLETE);
@@ -201,8 +220,10 @@ public class Ringo implements Runnable {
 			String input = scanner.nextLine();
 			if (input.equalsIgnoreCase("show-matrix")) {
 				System.out.println("\nlegend (maps index to host for columns and rows): \n");
+				System.out.print("\tindex");
+				System.out.println("\thostname:port");
 				for (int i = 0; i < ringSize; i++) {
-					System.out.println("\t" +i+ ": " +this.indexRtt.get(i));
+					System.out.println("\t" +i+ ":  \t" +this.indexRtt.get(i));
 				}
 
 				System.out.println("\t");
@@ -238,6 +259,29 @@ public class Ringo implements Runnable {
 		// System.out.println(this.lsa);
 	}
 
+	/**
+	 * Performs peer discovery using two distinct phases to promote
+	 * a higher likelihood of success across an unreliable network.
+	 * 
+	 * Utilizes two types of packets - ordinary LSA packets which
+	 * are used to communicate LSA table entries, and LSA_COMPLETE
+	 * packets which are broadcasted across the network to indicate
+	 * that this Ringo has successfully discovered all N-1 peers.
+	 * 
+	 * LSA packets are sent continuously across the network until
+	 * a completed LSA table is created, and peer discovery at this 
+	 * node is finished.
+	 * 
+	 * Once discovery is completed for this node, consensus must be 
+	 * established to exit this function. This ensures that all nodes
+	 * will synchronize all of their network initialization procedures.
+	 * Consensus is reached when this node receives an LSA_COMPLETE
+	 * packet from all N neighbors. This node simultaneously sends
+	 * LSA_COMPLETE packets to all its N-1 neighbors continuously.
+	 * 
+	 * @param recvQueue - concurrency-safe queue that holds all packets received from the network buffer
+	 * @param sendQueue - concurrency-safe queue that holds all packets waiting to be sent from the network buffer
+	 */
 	private void peerDiscovery(LinkedBlockingQueue<RingoPacket> recvQueue, LinkedBlockingQueue<RingoPacket> sendQueue) {
 		Hashtable<String, Boolean> converged = new Hashtable<String, Boolean>();
 		this.lsa.put(this.localName+":"+this.localPort, 1);
@@ -325,6 +369,16 @@ public class Ringo implements Runnable {
 		}
 	}
 
+	/**
+	 * Helper function for consensus phase of peer discovery. Compares 
+	 * the elements of the parameter "converged" with this node's LSA
+	 * table. If both contain all identical elements, peer discovery
+	 * can be considered complete.
+	 * 
+	 * 
+	 * @param converged - data structure containing all nodes that have sent LSA_COMPLETE nodes to this Ringo.
+	 * @return true if peer discovery is complete, false otherwise
+	 */
 	private boolean isLsaConverged(Hashtable<String, Boolean> converged) {
 		if (this.lsa.size() >= ringSize) {
 			converged.put(this.localName+":"+this.localPort, true);
@@ -350,7 +404,23 @@ public class Ringo implements Runnable {
 
 		return true;
 	}
-
+	
+	/**
+	 * Generates an RTT vector between this node and all its N peers.
+	 * Uses the PING_REQ and PING_RES type packets to find the RTT value
+	 * for a given node. A PING_RES packet always contains a timestamp
+	 * indicating when its corresponding PING_REQ request was first sent 
+	 * and a timestamp indicating when it was first received at this node. 
+	 * The difference of these values results in our RTT value.
+	 * 
+	 * As with peer discovery, consensus must be established across
+	 * the network to finish the RTT vector generation process. This is 
+	 * performed in the same way as peer discovery, utilizing
+	 * PING_COMPLETE packets to communicate completion.
+	 * 
+	 * @param recvQueue - concurrency-safe queue that holds all packets received from the network buffer
+	 * @param sendQueue - concurrency-safe queue that holds all packets waiting to be sent from the network buffer
+	 */
 	private void rttVectorGeneration(LinkedBlockingQueue<RingoPacket> recvQueue, LinkedBlockingQueue<RingoPacket> sendQueue) {
 		HashSet<String> converged = new HashSet<String>();
 		String localkey = this.localName+":"+this.localPort;
@@ -363,7 +433,7 @@ public class Ringo implements Runnable {
 
 		// ping requests
 		//while (!converged.containsAll(this.lsa.keySet())) {
-		while(!isRttVectorConverged()) {
+		while(!isRttVectorComplete()) {
 			// send packets to all nodes
 			Iterator iter = this.lsa.keySet().iterator();
 
@@ -434,8 +504,14 @@ public class Ringo implements Runnable {
 		}
 	}
 
-
-	private boolean isRttVectorConverged() {
+	/**
+	 * Helper function to identify completion of RTT vector. Checks 
+	 * the elements in this node's RTT vector to see if any default values
+	 * (in this project they are -1) still exist.
+	 * 
+	 * @return true if RTT vector is complete, false otherwise
+	 */
+	private boolean isRttVectorComplete() {
 		for (int j = 0; j < this.rtt[0].length; j++) {
 			//System.out.println("value in rtt at: " +j+ " is " +this.rtt[0][j]);
 			if (this.rtt[0][j] == -1) {
@@ -447,6 +523,18 @@ public class Ringo implements Runnable {
 		return true;
 	}
 
+	/**
+	 * Multiple data structures are used to maintain the RTT matrix.
+	 * These data structures must be used cleanly, at risk of 
+	 * damaging this Ringo's network capabilities.
+	 * 
+	 * This function isolates all code related to RTT vector writing
+	 * into a single location.
+	 * 
+	 * @param packet - packet from which we are writing into our RTT matrix
+	 * @param index - index this packet's RTT vector will be assigned in our RTT matrix.
+	 * @param rtt - value for RTT from this node and this packet's source node
+	 */
 	private void assignRtt(RingoPacket packet, int index, long rtt) {
 		try {
 			InetAddress src = InetAddress.getLocalHost();
@@ -462,6 +550,23 @@ public class Ringo implements Runnable {
 		}
 	}
 
+	/**
+	 * Final phase of network initialization - convergence of RTT matrices
+	 * across the network.
+	 * 
+	 * The logic is modeled in exactly the same way as RTT vector generation.
+	 * First we send and receive RTT_REQ and RTT_RES packets to construct
+	 * a complete RTT matrix, and then we handle consensus in the same way
+	 * as previous phases of initialization.
+	 * 
+	 * To handle consensus for RTT convergence, we use the RTT_COMPLETE type
+	 * packet to signify to peers that our matrix is complete. Consensus
+	 * is effectively reached when we receive a unique RTT_COMPLETE packet
+	 * from all N-1 peers.
+	 * 
+	 * @param recvQueue - concurrency-safe queue that holds all packets received from the network buffer
+	 * @param sendQueue - concurrency-safe queue that holds all packets waiting to be sent from the network buffer
+	 */
 	private void rttConvergence(LinkedBlockingQueue<RingoPacket> recvQueue, LinkedBlockingQueue<RingoPacket> sendQueue) {
 		HashSet<String> converged = new HashSet<String>();
 		String localkey = this.localName+":"+this.localPort;
@@ -525,6 +630,13 @@ public class Ringo implements Runnable {
 		}
 	}
 
+	/**
+	 * Helper function to identify completion of RTT matrix. Checks 
+	 * the elements in this node's RTT matrix to see if any default values
+	 * (in this project they are -1) still exist.
+	 * 
+	 * @return true if RTT matrix is complete, false otherwise
+	 */
 	private boolean isRttConverged() {
 		for (int i = 0; i < this.rtt.length; i++) {
 			for (int j = 0; j < this.rtt[0].length; j++) {
@@ -539,6 +651,16 @@ public class Ringo implements Runnable {
 		return true;
 	}
 
+	/**
+	 * Multiple data structures are used to maintain the RTT matrix.
+	 * These data structures must be used cleanly, at risk of 
+	 * damaging this Ringo's network capabilities.
+	 * 
+	 * This function isolates all code related to RTT matrix writing
+	 * into a single location.
+	 * 
+	 * @param packet - packet from which we are writing into our RTT matrix
+	 */
 	private void addRttVectorToMatrix(RingoPacket packet) {
 		String packetKey = packet.getSourceIP()+":"+packet.getSourcePort();
 		long [][] packetRtt = packet.getRtt();
@@ -556,6 +678,14 @@ public class Ringo implements Runnable {
 
 	}
 
+	/**
+	 * Used to flush the "queue" parameter of all packets of a specific
+	 * type. Helpful when queue is clogged after any network initialization
+	 * phase, such as peer discovery.
+	 * 
+	 * @param queue - concurrency-safe queue that holds all packets for sending or receiving
+	 * @param type - type of packet to flush from this queue
+	 */
 	private void flushType(LinkedBlockingQueue<RingoPacket> queue, PacketType type) {
 		Iterator iter = queue.iterator();
 
@@ -567,6 +697,17 @@ public class Ringo implements Runnable {
 		}
 	}
 
+	/**
+	 * Since the "queue" parameter contains many different types of packets,
+	 * it can be inconvenient when trying to access packets of a specific type
+	 * due to the FIFO nature of this data structure. We can bypass this 
+	 * characteristic of our queue by providing the type we are looking for.
+	 * Returns the first packet of PacketType type in the queue.
+	 * 
+	 * @param queue - concurrency-safe queue that holds all packets for sending or receiving
+	 * @param type - type of packet to take from this queue
+	 * @return RingoPacket if found, null otherwise
+	 */
 	private RingoPacket takeType(LinkedBlockingQueue<RingoPacket> queue, PacketType type) {
 		Iterator iter = queue.iterator();
 
@@ -581,6 +722,21 @@ public class Ringo implements Runnable {
 		return null;
 	}
 
+	/**
+	 * Since the "queue" parameter contains many different types of packets,
+	 * it can be inconvenient when trying to access a specific packet
+	 * due to the FIFO nature of this data structure. We can bypass this 
+	 * characteristic of our queue by providing basic information of what
+	 * we are looking for.
+	 * 
+	 * Returns the first packet matching all parameters in this queue.
+	 * 
+	 * @param queue - concurrency-safe queue that holds all packets for sending or receiving
+	 * @param type - type of packet to take from this queue
+	 * @param hostname - source hostname of the packet to take from this queue
+	 * @param port - source port of the packet to take from this queue
+	 * @return RingoPacket if found, null otherwise
+	 */
 	private RingoPacket takeSpecific(LinkedBlockingQueue<RingoPacket> queue, PacketType type, String hostname, int port) {
 		Iterator iter = queue.iterator();
 
@@ -595,6 +751,16 @@ public class Ringo implements Runnable {
 		return null;
 	}
 
+	/**
+	 * Contains the function call to a recursive Traveling Salesman Problem
+	 * solution. Used to find the "fastest" or optimal path in our ring
+	 * network.
+	 * 
+	 * Converts a list of RTT matrix indices returned from the "recurseNetwork"
+	 * into a corresponding list of hostname:port combinations
+	 * 
+	 * @return ArrayList<String> containing the optimal ring path in "[hostname]:[port]" format
+	 */
 	public ArrayList<String> generateOptimalRing() {
 		Iterator iter = this.lsa.keySet().iterator();
 		ArrayList<Long> currRoute = new ArrayList<Long>();
@@ -623,17 +789,17 @@ public class Ringo implements Runnable {
 		return toReturn;
 	}
 
+	/**
+	 * Custom Traveling Salesman Problem implementation. Recurses
+	 * through network using neighbor list to find the "fastest" route
+	 * beginning from the "curr" parameter.
+	 * 
+	 * @return ArrayList<Long> containing the optimal ring path represented as indices of the RTT matrix
+	 */
 	private ArrayList<Long> recurseNetwork(String curr, Set<String> unvisited, Set<String> visited) {
 		ArrayList<ArrayList<Long>> paths = new ArrayList<ArrayList<Long>>();
 		long currIndex = (long) this.rttIndex.get(curr);
 		visited.add(curr);
-
-		/*if (unvisited.isEmpty()) {
-			System.out.println("made it");
-			ArrayList<Long> toReturn = new ArrayList<Long>();
-			toReturn.add((long) 0);
-			return toReturn;
-		}*/
 
 		if (visited.size() == unvisited.size()) {
 			ArrayList<Long> toReturn = new ArrayList<Long>();
@@ -673,6 +839,14 @@ public class Ringo implements Runnable {
 
 	}
 
+	/**
+	 * This Thread handles all inbound network functions.
+	 * Puts all received and serialized packets into parent class
+	 * field "recvQueue", a multithreaded data structure.
+	 * 
+	 * @author sainaidu
+	 * @author andrewray
+	 */
 	private class ReceiverThread implements Runnable {
 		LinkedBlockingQueue<RingoPacket> packetQueue;
 
@@ -745,6 +919,14 @@ public class Ringo implements Runnable {
 		}
 	}
 
+	/**
+	 * This Thread handles all outbound network functions.
+	 * Puts all received and serialized packets into parent class
+	 * field "recvQueue", a multithreaded data structure.
+	 * 
+	 * @author sainaidu
+	 * @author andrewray
+	 */
 	private class SenderThread implements Runnable {
 		LinkedBlockingQueue<RingoPacket> packetQueue;
 

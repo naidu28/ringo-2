@@ -1,3 +1,9 @@
+/**
+ * Enum describing the type of a RingoPacket
+ * 
+ * @author sainaidu
+ * @author andrewray
+ */
 public enum PacketType {
 	SYN,
 	ACK,

@@ -1,5 +1,12 @@
 import java.lang.Thread;
 
+/**
+ * This class instantiates the whole Ringo application.
+ * Given the correct number and type of command-line arguments,
+ * this class starts a Ringo node as a child Thread
+ * 
+ * @author sainaidu
+ */
 public class App {	
     public static void main(String[] args) {
     		Role role;
