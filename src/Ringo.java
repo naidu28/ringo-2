@@ -58,7 +58,11 @@ public class Ringo implements Runnable {
 		this.localPort = localPort;
 		this.pocName = pocName;
 		try {
-			this.pocName = InetAddress.getByName(pocName).getHostAddress();
+			if (this.pocName.equals("localhost")) {
+				this.pocName = InetAddress.getLocalHost().getHostAddress();
+			} else {
+				this.pocName = InetAddress.getByName(pocName).getHostAddress();
+			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -321,6 +325,9 @@ public class Ringo implements Runnable {
 						System.out.println(e);
 					}
 
+					System.out.println(this.lsa);
+					// System.out.println("send queue: " +sendQueue);
+					// System.out.println("recv queue: " +recvQueue);
 					Iterator iter = this.lsa.keySet().iterator();
 
 					while (iter.hasNext()) {
@@ -351,7 +358,9 @@ public class Ringo implements Runnable {
 					} catch (Exception e) {
 						System.out.println(e);
 					}
-
+					
+					System.out.println(converged);
+					
 					Iterator iter = this.lsa.keySet().iterator();
 
 					while (iter.hasNext()) {
