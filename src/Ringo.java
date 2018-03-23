@@ -57,6 +57,7 @@ public class Ringo implements Runnable {
 		}
 		this.localPort = localPort;
 		this.pocName = pocName;
+		if (this.pocName != null) {
 		try {
 			if (this.pocName.equals("localhost")) {
 				this.pocName = InetAddress.getLocalHost().getHostAddress();
@@ -65,6 +66,7 @@ public class Ringo implements Runnable {
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
+		}
 		}
 		this.pocPort = pocPort;
 		this.ringSize = ringSize;
