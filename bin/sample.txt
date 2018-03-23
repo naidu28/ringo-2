@@ -1,0 +1,44 @@
+sample input:
+  * [snaidu6@networklab3 ringo]$ java -jar ringo.jar S 3000 0 0 5
+  * [snaidu6@networklab8 ringo]$ java -jar ringo.jar S 3000 networklab3.cc.gatech.edu 3000 5
+  * [snaidu6@networklab1 ringo]$ java -jar ringo.jar S 3000 networklab8.cc.gatech.edu 3000 5
+  * [snaidu6@networklab4 ringo]$ java -jar ringo.jar S 4000 networklab1.cc.gatech.edu 3000 5
+  * [snaidu6@networklab5 ringo]$ java -jar ringo.jar S 3000 networklab4.cc.gatech.edu 4000 5
+
+sample output:
+  * Point of contact not reachable currently. Continuing to attempt connection...
+
+    Starting peer discovery...
+    Peer discovery complete!
+
+    Starting RTT Vector creation...
+    RTT Vector creation complete!
+
+    Starting RTT Matrix convergence...
+    RTT Matrix convergence complete!
+    Network is ready to use.
+
+    Enter any of the following commands: show-matrix, show-ring, disconnect
+
+  * Enter any of the following commands: show-matrix, show-ring, disconnect
+    "show-matrix"
+
+    legend (maps index to host for columns and rows):
+
+           	index  	hostname:port
+           	0:     	130.207.107.12:3000
+           	1:     	130.207.107.19:3000
+           	2:     	130.207.107.15:4000
+           	3:     	130.207.107.16:3000
+           	4:     	130.207.107.14:3000
+
+           	0      	76     	94     	40     	25
+           	10     	0      	81     	41     	36
+           	10     	88     	0      	624    	29
+           	13     	86     	94     	0      	29
+           	14     	82     	73     	227    	0
+
+  * Enter any of the following commands: show-matrix, show-ring, disconnect
+    "show-ring"
+
+    130.207.107.12:3000 -> 130.207.107.15:4000 -> 130.207.107.14:3000 -> 130.207.107.16:3000 -> 130.207.107.19:3000
