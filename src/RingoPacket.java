@@ -1,3 +1,8 @@
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.Hashtable;
 
 /**
@@ -31,6 +36,54 @@ public class RingoPacket implements java.io.Serializable {
     private long startTime;
     private long stopTime;
     private byte[] payload = new byte[MAX_PAYLOAD_SIZE];
+    
+	/**
+	 * Serialization is the process of converting a Java object into
+	 * bytecode. This is necessary for us to send Java objects over
+	 * the network.
+	 * 
+	 * @param obj - serializable object (in this project, only RingoPacket)
+	 * @return byte [] - bytecode representation of the object
+	 */
+	public static byte [] serialize(Object obj) {
+		ByteArrayOutputStream bo = new ByteArrayOutputStream();
+		byte [] serializedObj = null;
+
+		try {
+			ObjectOutputStream so = new ObjectOutputStream(bo);
+			so.writeObject(obj);
+			so.flush();
+			serializedObj = bo.toByteArray();
+		} catch (IOException e) {
+			// handle later
+		}
+
+		return serializedObj;
+	}
+    
+    /**
+	 * Deserialization is the process of converting a segment of
+	 * serialized bytecode into a valid Java object. This is the 
+	 * reverse of the serialization process.
+	 * 
+	 * @param b [] - bytecode representation of the object obj - 
+	 * @return RingoPacket - deserialized object (in this project, only RingoPacket)
+	 */
+	public static RingoPacket deserialize(byte [] b) {
+		RingoPacket obj = null;
+
+		ByteArrayInputStream bi = new ByteArrayInputStream(b);
+
+		try {
+			ObjectInputStream si = new ObjectInputStream(bi);
+			obj = (RingoPacket) si.readObject();
+		} catch (Exception e) {
+			// handle later
+			System.out.println("this exception: " +e);
+		}
+
+		return obj;
+	}
 
     /**
      * RingoPacket converts a raw UDP packet into one that can be

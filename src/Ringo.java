@@ -47,7 +47,7 @@ public class Ringo implements Runnable {
 	 * The constructor accepts all of the command-line arguments specified in the
 	 * reference material
 	 */
-	public Ringo(Role role, int localPort, String pocName, int pocPort, int ringSize) {
+	public Ringo(Role role, int localPort, String pocName, int pocPort, int ringSize) {		
 		this.role = role;
 		this.localName = "";
 		try {
@@ -58,15 +58,15 @@ public class Ringo implements Runnable {
 		this.localPort = localPort;
 		this.pocName = pocName;
 		if (this.pocName != null) {
-		try {
-			if (this.pocName.equals("localhost")) {
-				this.pocName = InetAddress.getLocalHost().getHostAddress();
-			} else {
-				this.pocName = InetAddress.getByName(pocName).getHostAddress();
+			try {
+				if (this.pocName.equals("localhost")) {
+					this.pocName = InetAddress.getLocalHost().getHostAddress();
+				} else {
+					this.pocName = InetAddress.getByName(pocName).getHostAddress();
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
 			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
 		}
 		this.pocPort = pocPort;
 		this.ringSize = ringSize;
@@ -88,56 +88,6 @@ public class Ringo implements Runnable {
 		} catch(SocketException e) {
 			// handle this later
 		}
-	}
-
-	/**
-	 * Serialization is the process of converting a Java object into
-	 * bytecode. This is necessary for us to send Java objects over
-	 * the network.
-	 * 
-	 * @param obj - serializable object (in this project, only RingoPacket)
-	 * @return byte [] - bytecode representation of the object
-	 */
-	public byte [] serialize(Object obj) {
-		ByteArrayOutputStream bo = new ByteArrayOutputStream();
-		byte [] serializedObj = null;
-
-		try {
-			ObjectOutputStream so = new ObjectOutputStream(bo);
-			so.writeObject(obj);
-			so.flush();
-			serializedObj = bo.toByteArray();
-		} catch (IOException e) {
-			// handle later
-		}
-
-		return serializedObj;
-	}
-
-	/**
-	 * Deserialization is the process of converting a segment of
-	 * serialized bytecode into a valid Java object. This is the 
-	 * reverse of the serialization process.
-	 * 
-	 * @param b [] - bytecode representation of the object obj - 
-	 * @return RingoPacket - deserialized object (in this project, only RingoPacket)
-	 */
-	public RingoPacket deserialize(byte [] b) {
-		RingoPacket obj = null;
-		for (int i = 1180; i < 1190; i++) {
-			// System.out.println(b[i]);
-		}
-		ByteArrayInputStream bi = new ByteArrayInputStream(b);
-
-		try {
-			ObjectInputStream si = new ObjectInputStream(bi);
-			obj = (RingoPacket) si.readObject();
-		} catch (Exception e) {
-			// handle later
-			System.out.println("this exception: " +e);
-		}
-
-		return obj;
 	}
 
 	/**
@@ -887,7 +837,7 @@ public class Ringo implements Runnable {
 		}
 
 		private void deserializeAndEnqueue(byte [] data) {
-			RingoPacket packet = deserialize(data);
+			RingoPacket packet = RingoPacket.deserialize(data);
 			packet.setStopTime(System.currentTimeMillis());
 			if (packet != null) {
 				replaceDuplicates(packet);
@@ -952,7 +902,7 @@ public class Ringo implements Runnable {
 					// System.out.println("current time start: " +System.currentTimeMillis());
 					replaceDuplicates(packet);
 					packet.setStartTime(System.currentTimeMillis());
-					byte [] data = serialize(packet);
+					byte [] data = RingoPacket.serialize(packet);
 					DatagramPacket udpPacket = createDatagram(data, packet);
 					if (udpPacket != null) {
 						try {
