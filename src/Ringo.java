@@ -1,12 +1,7 @@
 import java.net.DatagramSocket;
 import java.net.DatagramPacket;
-import java.net.SocketException;
 import java.net.InetAddress;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.io.ByteArrayOutputStream;
-import java.io.ObjectOutputStream;
-import java.io.ByteArrayInputStream;
-import java.io.ObjectInputStream;
 import java.util.Hashtable;
 import java.util.HashSet;
 import java.util.Set;
@@ -47,7 +42,8 @@ public class Ringo implements Runnable {
 	 * The constructor accepts all of the command-line arguments specified in the
 	 * reference material
 	 */
-	public Ringo(Role role, int localPort, String pocName, int pocPort, int ringSize) {		
+	public Ringo(Role role, int localPort, String pocName, int pocPort, int ringSize, DatagramSocket socket) {		
+		this.socket = socket;
 		this.role = role;
 		this.localName = "";
 		try {
@@ -82,12 +78,6 @@ public class Ringo implements Runnable {
 		this.recvQueue = new LinkedBlockingQueue<RingoPacket>();
 		this.sendQueue = new LinkedBlockingQueue<RingoPacket>();
 
-
-		try {
-			this.socket = new DatagramSocket(this.localPort);
-		} catch(SocketException e) {
-			// handle this later
-		}
 	}
 
 	/**

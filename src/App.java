@@ -1,5 +1,7 @@
 import java.io.PrintStream;
 import java.lang.Thread;
+import java.net.DatagramSocket;
+import java.net.SocketException;
 import java.util.function.Function;
 
 /**
@@ -18,6 +20,8 @@ public class App {
 	private static String pocHost;
 	private static int pocPort;
 	private static int n;
+	
+	private static DatagramSocket socket;
 
 	public static void main(String[] args) {
 		try {
@@ -28,9 +32,20 @@ public class App {
 			System.exit(1);
 		}
 
-		Thread ringoThread = new Thread(new Ringo(role, port, pocHost, pocPort, n));
+		System.out.println(String.format("Provided Arguments: Role: %s\tLocal Port: %d\tPoC: %s:%d\tN: %d\n",
+				role.toString(), port, pocHost, pocPort, n));
+
+		try {
+			socket = new DatagramSocket(port);
+		} catch(SocketException e) {
+			String errmsg = String.format("Could not bind to port %d. Exiting (1)\n%s", port, e.getMessage());
+			System.err.println(errmsg);
+			System.exit(1);
+		}
+
+		Thread ringoThread = new Thread(new Ringo(role, port, pocHost, pocPort, n, socket));
 		ringoThread.start();
-    		while (ringoThread.isAlive()) {}
+		while (ringoThread.isAlive()) {}
 
 		System.exit(0);
 	}
