@@ -51,9 +51,14 @@ public class App {
 		Thread ringoThread = new Thread(new Ringo(role, port, pocHost, pocPort, n, socket, userCommandList));
 		ringoThread.start();
 		Scanner scanner = new Scanner(System.in);
+		int numCommands = userCommandList.size();
 		while (ringoThread.isAlive()) {
+			System.out.println("Enter any of the following commands: show-matrix, show-ring, disconnect");
 			String command = scanner.nextLine();
 			userCommandList.add(command);
+			if (numCommands > userCommandList.size()) {
+				System.out.println("Sorry but the system is busy processing another command. Try again later.");
+			}
 		}
 		scanner.close();
 		
