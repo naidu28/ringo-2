@@ -195,6 +195,10 @@ public class RingoPacket implements java.io.Serializable {
 		return this.stopTime;
 	}
 
+	public void setPayload(byte [] payload) {
+		this.payload = payload;
+	}
+	
     public byte[] getPayload() {
         return payload;
     }

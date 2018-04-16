@@ -3,6 +3,8 @@ import java.lang.Thread;
 import java.net.DatagramSocket;
 import java.net.SocketException;
 import java.util.function.Function;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.Scanner;
 
 /**
  * This class instantiates the whole Ringo application. Given the correct number
@@ -20,10 +22,13 @@ public class App {
 	private static String pocHost;
 	private static int pocPort;
 	private static int n;
+	private static LinkedBlockingQueue<String> userCommandList;
 	
 	private static DatagramSocket socket;
 
 	public static void main(String[] args) {
+		userCommandList = new LinkedBlockingQueue<String>();
+		
 		try {
 			parseArguments(args);
 		} catch (IllegalArgumentException e) {
@@ -43,10 +48,15 @@ public class App {
 			System.exit(1);
 		}
 
-		Thread ringoThread = new Thread(new Ringo(role, port, pocHost, pocPort, n, socket));
+		Thread ringoThread = new Thread(new Ringo(role, port, pocHost, pocPort, n, socket, userCommandList));
 		ringoThread.start();
-		while (ringoThread.isAlive()) {}
-
+		Scanner scanner = new Scanner(System.in);
+		while (ringoThread.isAlive()) {
+			String command = scanner.nextLine();
+			userCommandList.add(command);
+		}
+		scanner.close();
+		
 		System.exit(0);
 	}
 

@@ -9,6 +9,11 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.lang.Thread;
 import java.util.Scanner;
+import java.io.File;
+import java.io.FileInputStream;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.Date;
 
 import java.io.IOException;
 
@@ -30,6 +35,7 @@ public class Ringo implements Runnable {
 	private String pocName;
 	private final int pocPort;
 	private final int ringSize;
+	private LinkedBlockingQueue<String> userCommandList;
 
 	private Hashtable<String, Integer> lsa;
 	private Hashtable<String, Integer> rttIndex;
@@ -42,7 +48,8 @@ public class Ringo implements Runnable {
 	 * The constructor accepts all of the command-line arguments specified in the
 	 * reference material
 	 */
-	public Ringo(Role role, int localPort, String pocName, int pocPort, int ringSize, DatagramSocket socket) {		
+	public Ringo(Role role, int localPort, String pocName, int pocPort, int ringSize, DatagramSocket socket, LinkedBlockingQueue<String> userCommandList) {		
+		this.userCommandList = userCommandList;
 		this.socket = socket;
 		this.role = role;
 		this.localName = "";
@@ -159,50 +166,68 @@ public class Ringo implements Runnable {
 
 		System.out.println("RTT Matrix convergence complete!");
 		System.out.println("Network is ready to use.\n");
-		Scanner scanner = new Scanner(System.in);
 
+		executionLoop(netIn, netOut);
+		// System.out.println(this.lsa);
+	}
+	
+	private void executionLoop(Thread netIn, Thread netOut) {
 		while (true) {
 			System.out.println("Enter any of the following commands: show-matrix, show-ring, disconnect");
-			String input = scanner.nextLine();
-			if (input.equalsIgnoreCase("show-matrix")) {
-				System.out.println("\nlegend (maps index to host for columns and rows): \n");
-				System.out.print("\tindex");
-				System.out.println("\thostname:port");
-				for (int i = 0; i < ringSize; i++) {
-					System.out.println("\t" +i+ ":  \t" +this.indexRtt.get(i));
+			if (!this.userCommandList.isEmpty()) {
+				String command = "";
+				try {
+					command = this.userCommandList.take();
+				} catch (Exception e) {
+					e.printStackTrace();
 				}
-
-				System.out.println("\t");
-
-				for (int i = 0; i < this.rtt.length; i++) {
-					for (int j = 0; j < this.rtt.length; j++) {
-						System.out.print("\t" +this.rtt[i][j]+" ");
+				
+				if (command.split(" ")[0].equalsIgnoreCase("offline")) {
+					System.out.println("\n");
+				} else if (command.split(" ")[0].equalsIgnoreCase("send")) {
+					if (this.role != Role.SENDER) {
+						System.out.println("Unfortunately this is not a SENDER ringo; Try again from the SENDER ringo");
+					} else {
+						sendFile(command.split(" ")[1]);
+					}
+				} else if (command.equalsIgnoreCase("show-matrix")) {
+					System.out.println("\nlegend (maps index to host for columns and rows): \n");
+					System.out.print("\tindex");
+					System.out.println("\thostname:port");
+					for (int i = 0; i < ringSize; i++) {
+						System.out.println("\t" +i+ ":  \t" +this.indexRtt.get(i));
+					}
+	
+					System.out.println("\t");
+	
+					for (int i = 0; i < this.rtt.length; i++) {
+						for (int j = 0; j < this.rtt.length; j++) {
+							System.out.print("\t" +this.rtt[i][j]+" ");
+						}
+						System.out.println("");
+					}
+					System.out.println("\n");
+				} else if (command.equalsIgnoreCase("show-ring")) {
+					ArrayList<String> output = generateOptimalRing();
+	
+					System.out.println("\t");
+	
+					for (int i = 0; i < output.size(); i++) {
+						if (i != output.size() - 1)
+							System.out.print(output.get(i)+" -> ");
+						else
+							System.out.println(output.get(i));
 					}
 					System.out.println("");
+				} else if (command.equalsIgnoreCase("disconnect")) {
+					netIn.interrupt();
+					netOut.interrupt();
+					return;
+				} else {
+					System.out.println("Sorry, but your input was invalid. Try again.");
 				}
-				System.out.println("\n");
-			} else if (input.equalsIgnoreCase("show-ring")) {
-				ArrayList<String> output = generateOptimalRing();
-
-				System.out.println("\t");
-
-				for (int i = 0; i < output.size(); i++) {
-					if (i != output.size() - 1)
-						System.out.print(output.get(i)+" -> ");
-					else
-						System.out.println(output.get(i));
-				}
-				System.out.println("");
-			} else if (input.equalsIgnoreCase("disconnect")) {
-				netIn.interrupt();
-				netOut.interrupt();
-				scanner.close();
-				return;
-			} else {
-				System.out.println("Sorry, but your input was invalid. Try again.");
 			}
 		}
-		// System.out.println(this.lsa);
 	}
 
 	/**
@@ -789,7 +814,7 @@ public class Ringo implements Runnable {
 		return minPath;
 
 	}
-
+	
 	/**
 	 * This Thread handles all inbound network functions.
 	 * Puts all received and serialized packets into parent class
@@ -948,5 +973,114 @@ public class Ringo implements Runnable {
 				}
 			}
 		}
+	}
+	
+	// might need a DATA_END packet
+	private void sendFile(String filepath) {
+		File file = new File(filepath);
+		Hashtable<String, Boolean> windowAckList = new Hashtable<String, Boolean>();
+		
+		try {
+			FileInputStream fileReader;
+			fileReader = new FileInputStream(file);
+			
+			int seqNumber = 0;
+			RingoPacket [] window = new RingoPacket[10];
+			byte [] data = new byte[10000];
+			
+			while (fileReader.read(data) != -1) {
+				RingoPacket toSend = createSendPacket(data, seqNumber);
+				window[seqNumber%50] = toSend;
+				if (seqNumber%50 == 49) {
+					if (!transmitWindow(window)) {
+						// if (!this.keepAlive.isAlive(window[0].getDestIP(), window[0].getDestPort())) {
+						if (true) {
+							fileReader = new FileInputStream(file);
+							seqNumber = 0;
+						}
+					}
+				}
+			}
+			
+		} catch (Exception e) {
+			
+		}
+	}
+	
+	private boolean transmitWindow(RingoPacket [] window) {
+		// implement go-back-N with cumulative ACK approach and window-timeout
+		int trials = 0;
+		int highestAck = window[0].getSequenceNumber() - 1;
+		final boolean [] done = new boolean[1];
+		
+		while (highestAck != window[window.length - 1].getSequenceNumber() && trials < 3) {
+			Timer windowTimer = new Timer();
+			windowTimer.schedule(new WindowTimerTask("some task", done), 3000L);
+			
+			for (int i = (highestAck + 1 - window[0].getSequenceNumber()); i < window.length; i++) {
+				try {
+					this.sendQueue.put(window[i]);
+				} catch (Exception e) {
+					System.out.println("do something");
+				}
+			}
+			
+			RingoPacket ack = this.takeSpecific(this.recvQueue, PacketType.DATA, window[0].getDestIP(), window[0].getDestPort());
+			
+			while (!done[0]) {
+				if (ack.getSequenceNumber() > highestAck) {
+					highestAck = ack.getSequenceNumber();
+				}
+				
+				ack = this.takeSpecific(this.recvQueue, PacketType.DATA, window[0].getDestIP(), window[0].getDestPort());
+			}
+			
+			trials++;
+		}
+		
+		if (highestAck != window[window.length].getSequenceNumber()) {
+			return false;
+		} else {
+			return true;
+		}
+	}
+	
+	private RingoPacket createSendPacket(byte [] data, int seqNumber) {
+		
+		// need to define a keep-alive method that returns the next host name and port
+		// RingoPacket toSend = new RingoPacket(this.localName, this.localPort, this.keepAlive.nextHost, this.keepAlive.nextPort, 0, seqNumber, PacketType.DATA, this.role, this.ringSize);
+		ArrayList<String> route = generateOptimalRing();
+		boolean takeNext = false;
+		String next = "";
+		for (int i = 0; i < route.size(); i++) {
+			if (takeNext) {
+				next = route.get(i);
+			}
+			
+			if (route.get(i) == this.localName + ":" + this.localPort) {
+				takeNext = true;
+			}
+		}
+		
+		RingoPacket toSend = new RingoPacket(this.localName, this.localPort, next.substring(0, next.indexOf(":")), Integer.parseInt(next.substring(next.indexOf(":"), next.length())), 0, seqNumber, PacketType.DATA, this.role, this.ringSize);
+		toSend.setPayload(data);
+		return toSend;
+	}
+	
+	private class WindowTimerTask extends TimerTask {
+		private String name;
+		private final boolean [] done;
+		
+	    public WindowTimerTask(String name, final boolean [] done) {
+	        this.name = name;
+	        this.done = done;
+	    }
+	    
+	    public void run() {
+	        System.out.println(Thread.currentThread() + " executing " +
+	                           this.name + " [" +
+	                           new Date() + "]");
+	        this.done[0] = true;
+	    }
 	}
 }
