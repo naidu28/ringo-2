@@ -1,23 +1,27 @@
 public class HostInformation {
 	
-	private boolean active;
+	private HostState state;
 	private boolean local;
 	private String host;
 	private int port;
 
-	public HostInformation(boolean active, boolean local, String host, int port) {
-		this.active = active;
+	public HostInformation(HostState state, boolean local, String host, int port) {
+		this.state = state;
 		this.local = local;
 		this.host = host; 
 		this.port = port;
 	}
 
 	public boolean isActive() {
-		return active;
+		return !(state == HostState.DOWN);
+	}
+	
+	public HostState getState() {
+		return this.state;
 	}
 
-	public void setActive(boolean active) {
-		this.active = active;
+	public void setState(HostState newstate) {
+		this.state = newstate;
 	}
 
 	public boolean isLocal() {
@@ -37,7 +41,7 @@ public class HostInformation {
 	}
 	
 	public String toString() {
-		String activeString = (active) ? "active" : "inactive";
+		String activeString = state.name();
 		String localString = (local) ? "local" : "remote";
 		
 		return "["
@@ -52,9 +56,8 @@ public class HostInformation {
 		if (o == null || o.getClass() != this.getClass())
 			return false;
 		
-		@SuppressWarnings("unchecked")
 		HostInformation other = (HostInformation) o;
-		if (active == other.isActive()
+		if (state == other.getState()
 			&& local == other.isLocal()
 			&& host.equalsIgnoreCase(other.getHost())
 			&& port == other.getPort()) {		

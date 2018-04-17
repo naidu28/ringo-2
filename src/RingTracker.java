@@ -24,8 +24,7 @@ public class RingTracker {
 			int port = Integer.parseInt(host.split(":")[1]);
 			boolean active = true; // each host is assumed to be active at the start
 			boolean local = host.equalsIgnoreCase(me);
-			// public HostInformation(boolean active, boolean local, String host, int port)
-			hosts.add(new HostInformation(active, local, ip, port));
+			hosts.add(new HostInformation(HostState.UP, local, ip, port));
 		}
 		
 		// build up RTT information
@@ -105,7 +104,7 @@ public class RingTracker {
 		}
 	}
 	
-	public void updateHost(HostInformation host, boolean active) {
+	public void updateHost(HostInformation host, HostState state) {
 		if (host == null) 
 			throw new IllegalArgumentException("Cannot call updateHost with null host");
 		synchronized (hosts) {
@@ -115,7 +114,7 @@ public class RingTracker {
 			
 			int idx = hosts.indexOf(host);
 			HostInformation updated = hosts.get(idx);
-			updated.setActive(active);
+			updated.setState(state);
 			hosts.set(idx, updated);
 		}
 	}
