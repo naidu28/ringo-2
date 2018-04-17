@@ -52,7 +52,6 @@ public class App {
 
 	private static void parseArguments(String[] args) throws IllegalArgumentException {
 		if (args.length < NUM_ARGS) {
-			printHelp(System.err);
 			throw new IllegalArgumentException("At least four arguments must be given");
 		}
 
