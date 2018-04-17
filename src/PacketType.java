@@ -14,6 +14,7 @@ public enum PacketType {
     RTT_COMPLETE,
     KEEPALIVE,
     DATA,
+    DATA_ACK,
     PING_REQ,
     PING_RES,
     PING_COMPLETE
