@@ -65,7 +65,7 @@ public class HostInformation {
 	}
 	
 	public int hashCode() {
-		return toString().hashCode();
+		return hostString().hashCode();
 	}
 
 }
