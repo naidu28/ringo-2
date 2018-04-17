@@ -37,6 +37,7 @@ public class Ringo implements Runnable {
 	private long [][] rtt;
 	private LinkedBlockingQueue<RingoPacket> recvQueue;
 	private LinkedBlockingQueue<RingoPacket> sendQueue;
+	private LinkedBlockingQueue<RingoPacket> keepAliveQueue;
 
 	/**
 	 * The constructor accepts all of the command-line arguments specified in the
@@ -78,6 +79,7 @@ public class Ringo implements Runnable {
 		this.recvQueue = new LinkedBlockingQueue<RingoPacket>();
 		this.sendQueue = new LinkedBlockingQueue<RingoPacket>();
 
+		this.keepAliveQueue = new LinkedBlockingQueue<RingoPacket>();
 	}
 
 	/**
@@ -95,8 +97,10 @@ public class Ringo implements Runnable {
 	public void run() {
 		LinkedBlockingQueue<RingoPacket> recvQueue = this.recvQueue;
 		LinkedBlockingQueue<RingoPacket> sendQueue = this.sendQueue;
+		LinkedBlockingQueue<RingoPacket> keepAliveQueue = this.keepAliveQueue;
+		
 
-		Thread netIn = new Thread(new ReceiverThread(recvQueue));
+		Thread netIn = new Thread(new ReceiverThread(recvQueue, keepAliveQueue));
 		Thread netOut = new Thread(new SenderThread(sendQueue));
 		netIn.start();
 		netOut.start();
@@ -800,9 +804,11 @@ public class Ringo implements Runnable {
 	 */
 	private class ReceiverThread implements Runnable {
 		LinkedBlockingQueue<RingoPacket> packetQueue;
+		LinkedBlockingQueue<RingoPacket> keepAliveQueue;
 
-		private ReceiverThread(LinkedBlockingQueue<RingoPacket> packetQueue) {
-			this.packetQueue = packetQueue;
+		private ReceiverThread(LinkedBlockingQueue<RingoPacket> dataQueue, LinkedBlockingQueue<RingoPacket> keepAliveQueue) {
+			this.packetQueue = dataQueue;
+			this.keepAliveQueue = keepAliveQueue;
 		}
 
 		public void run() {
@@ -842,6 +848,9 @@ public class Ringo implements Runnable {
 					responseOut.setRttIndex(Ringo.this.rttIndex);
 					responseOut.setIndexRtt(Ringo.this.indexRtt);
 					Ringo.this.sendQueue.add(responseOut);
+				} else if (packet.getType() == PacketType.KEEPALIVE_REQ 
+						|| packet.getType() == PacketType.KEEPALIVE_ACK) {
+					this.keepAliveQueue.add(packet);
 				} else {
 					this.packetQueue.add(packet);
 				}
