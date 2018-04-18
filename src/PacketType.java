@@ -5,6 +5,8 @@
  * @author andrewray
  */
 public enum PacketType {
+	INIT_REQ,
+	INIT_RES,
 	SYN,
 	ACK,
     LSA,

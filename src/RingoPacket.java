@@ -36,6 +36,8 @@ public class RingoPacket implements java.io.Serializable {
     private long startTime;
     private long stopTime;
     private byte[] payload = new byte[MAX_PAYLOAD_SIZE];
+
+	private boolean initskip;
     
 	/**
 	 * Serialization is the process of converting a Java object into
@@ -224,9 +226,18 @@ public class RingoPacket implements java.io.Serializable {
     		this.startTime = packet.getStartTime();
     		this.stopTime = packet.getStopTime();
     		this.payload = packet.getPayload();
+    		this.initskip = packet.getInitSkip();
     }
     
     public String toString() {
     		return "source: " + this.sourceIP + ":" + this.sourcePort + "\n" + "destination: " + this.destIP + ":" + this.destPort + "\ntype: " + this.getType() + "\n";
     }
+
+	public boolean getInitSkip() {
+		return this.initskip;
+	}
+	
+	public void setInitSkip(boolean skip) {
+		this.initskip = skip;
+	}
 }
