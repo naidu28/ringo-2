@@ -42,6 +42,8 @@ public class Ringo implements Runnable {
 	private RingoPacketFactory factory;
 	private KeepAlive keepalive;
 	private Thread keepAliveThread;
+	
+	private boolean initialized;
 
 	/**
 	 * The constructor accepts all of the command-line arguments specified in the
@@ -84,6 +86,7 @@ public class Ringo implements Runnable {
 		this.sendQueue = new LinkedBlockingQueue<RingoPacket>();
 		this.keepAliveQueue = new LinkedBlockingQueue<RingoPacket>();
 		this.factory = new RingoPacketFactory(localName, localPort, role, ringSize);
+		this.initialized = false;
 	}
 
 	/**
@@ -104,7 +107,7 @@ public class Ringo implements Runnable {
 		LinkedBlockingQueue<RingoPacket> keepAliveQueue = this.keepAliveQueue;
 		
 
-		Thread netIn = new Thread(new ReceiverThread(recvQueue, keepAliveQueue));
+		Thread netIn = new Thread(new ReceiverThread(recvQueue, keepAliveQueue, sendQueue));
 		Thread netOut = new Thread(new SenderThread(sendQueue));
 		netIn.start();
 		netOut.start();
@@ -128,42 +131,52 @@ public class Ringo implements Runnable {
 		recvQueue.clear();
 		sendQueue.clear();
 		
-		System.out.println("\nStarting peer discovery...");
-		peerDiscovery(recvQueue, sendQueue);
-		try {
-			Thread.sleep(500);
-		} catch (Exception e) {
-			e.printStackTrace();
+		boolean skip = false;
+		if (this.pocName != null) {
+			System.out.println("\nAsking for Initialization state from PoC");
+			skip = checkInit();
 		}
-		System.out.println("Peer discovery complete!\n");
-		flushType(recvQueue, PacketType.LSA);
-		flushType(recvQueue, PacketType.LSA_COMPLETE);
-		System.out.println("Starting RTT Vector creation...");
-		rttVectorGeneration(recvQueue, sendQueue);
-		try {
-			Thread.sleep(3000);
-		} catch (Exception e) {
-			e.printStackTrace();
+		
+		if (!skip) {
+			System.out.println("\nStarting peer discovery...");
+			peerDiscovery(recvQueue, sendQueue);
+			try {
+				Thread.sleep(500);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			System.out.println("Peer discovery complete!\n");
+			flushType(recvQueue, PacketType.LSA);
+			flushType(recvQueue, PacketType.LSA_COMPLETE);
+			System.out.println("Starting RTT Vector creation...");
+			rttVectorGeneration(recvQueue, sendQueue);
+			try {
+				Thread.sleep(3000);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			System.out.println("RTT Vector creation complete!\n");
+			flushType(recvQueue, PacketType.LSA);
+			flushType(recvQueue, PacketType.LSA_COMPLETE);
+			flushType(recvQueue, PacketType.PING_RES);
+			flushType(recvQueue, PacketType.PING_COMPLETE);
+			try {
+				Thread.sleep(3000);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			flushType(recvQueue, PacketType.PING_RES);
+			flushType(recvQueue, PacketType.PING_COMPLETE);
+			System.out.println("Starting RTT Matrix convergence...");
+			rttConvergence(recvQueue, sendQueue);
+			try {
+				Thread.sleep(3000);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 		}
-		System.out.println("RTT Vector creation complete!\n");
-		flushType(recvQueue, PacketType.LSA);
-		flushType(recvQueue, PacketType.LSA_COMPLETE);
-		flushType(recvQueue, PacketType.PING_RES);
-		flushType(recvQueue, PacketType.PING_COMPLETE);
-		try {
-			Thread.sleep(3000);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		flushType(recvQueue, PacketType.PING_RES);
-		flushType(recvQueue, PacketType.PING_COMPLETE);
-		System.out.println("Starting RTT Matrix convergence...");
-		rttConvergence(recvQueue, sendQueue);
-		try {
-			Thread.sleep(3000);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+		
+		initialized = true;
 
 		System.out.println("RTT Matrix convergence complete!");
 		System.out.println("Network is ready to use.\n");
@@ -205,6 +218,36 @@ public class Ringo implements Runnable {
 			}
 		}
 		// System.out.println(this.lsa);
+	}
+
+	private boolean checkInit() {
+		boolean skip = false;
+		boolean done = false;
+		while (!done) {
+			RingoPacket req = factory.makePacket(pocName, pocPort, 0, 0, PacketType.INIT_REQ);
+			RingoPacket res = null;
+			try {
+				sendQueue.put(req);
+				res = recvQueue.take();
+			} catch (InterruptedException e) {
+				// nah
+			}
+			
+			if (res.getType() == PacketType.INIT_RES) {
+				done = true;
+				skip = res.getInitSkip();
+				if (skip) {
+					this.rtt = res.getRtt();
+					this.lsa = res.getLsa();
+					this.rttIndex = res.getRttIndex();
+					this.indexRtt = res.getIndexRtt();
+				}
+			}
+			// if not, drop the packet
+		}
+		flushType(recvQueue, PacketType.INIT_REQ);
+		flushType(sendQueue, PacketType.INIT_RES);
+		return skip;
 	}
 
 	/**
@@ -803,10 +846,14 @@ public class Ringo implements Runnable {
 	private class ReceiverThread implements Runnable {
 		LinkedBlockingQueue<RingoPacket> packetQueue;
 		LinkedBlockingQueue<RingoPacket> keepAliveQueue;
+		LinkedBlockingQueue<RingoPacket> outQueue;
 
-		private ReceiverThread(LinkedBlockingQueue<RingoPacket> dataQueue, LinkedBlockingQueue<RingoPacket> keepAliveQueue) {
+		private ReceiverThread(LinkedBlockingQueue<RingoPacket> dataQueue, 
+				LinkedBlockingQueue<RingoPacket> keepAliveQueue,
+				LinkedBlockingQueue<RingoPacket> outQueue) {
 			this.packetQueue = dataQueue;
 			this.keepAliveQueue = keepAliveQueue;
+			this.outQueue = outQueue;
 		}
 
 		public void run() {
@@ -848,6 +895,23 @@ public class Ringo implements Runnable {
 					Ringo.this.sendQueue.add(responseOut);
 				} else if (packet.getType() == PacketType.KEEPALIVE) {
 					this.keepAliveQueue.add(packet);
+				} else if (packet.getType() == PacketType.INIT_REQ) {
+					RingoPacket res = new RingoPacket(Ringo.this.localName, Ringo.this.localPort, packet.getSourceIP(), packet.getSourcePort(), 0, 0, PacketType.INIT_RES, Ringo.this.role, Ringo.this.ringSize);
+					if (Ringo.this.initialized) {
+						res.setIndexRtt(Ringo.this.indexRtt);
+						res.setRttIndex(Ringo.this.rttIndex);
+						res.setRtt(Ringo.this.rtt);
+						res.setLsa(Ringo.this.lsa);
+						res.setInitSkip(true);
+					} else {
+						res.setInitSkip(false);
+					}
+					
+					try {
+						sendQueue.put(res);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
 				} else {
 					this.packetQueue.add(packet);
 				}
