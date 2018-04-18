@@ -40,7 +40,6 @@ public class RingTracker {
 				HostInformation a = getInfoByHoststring(indexRTT.get(i));
 				HostInformation b = getInfoByHoststring(indexRTT.get(j));
 				
-				System.out.println(a.toString() + "\t" + b.toString() + "\t" + rttdelay);
 				Pair<HostInformation, HostInformation> pair = new Pair<>(a, b);
 				this.rtt.put(pair, rttdelay);
 			}
@@ -68,9 +67,6 @@ public class RingTracker {
 		// generate every possible path
 		List<Pair<Long, ArrayList<HostInformation>>> costs = new ArrayList<>();
 		permute(activeHosts, 0, costs);
-		for (Pair<Long, ArrayList<HostInformation>> path : costs) {
-			System.out.println(path.getA() + "\t" + Arrays.toString(path.getB().toArray()));
-		}
 		
 		Pair<Long, ArrayList<HostInformation>> lowestCost = null;
 		for (Pair<Long, ArrayList<HostInformation>> path : costs) {
@@ -153,6 +149,54 @@ public class RingTracker {
 			updated.setState(state);
 			hosts.set(idx, updated);
 		}
+	}
+	
+	/*
+	 * Prints the RTT matrix
+	 */
+	public String getMatrix() {
+		int entrylen = 12;
+		String ret = null;
+		synchronized (hosts) {
+			String[][] matrix = new String[hosts.size() + 1][hosts.size() + 1];
+			
+			char[] spaces = new char[entrylen];
+			Arrays.fill(spaces, ' ');
+			matrix[0][0] = new String(spaces);
+			
+			for (int i = 0; i < hosts.size(); i++) {
+				String host = hosts.get(i).hostString();
+				matrix[0][i + 1] = host.substring(host.length() - 12, host.length());
+			}
+			
+			for (int i = 0; i < hosts.size(); i++) {
+				String host = hosts.get(i).hostString();
+				matrix[i + 1][0] = host.substring(host.length() - 12, host.length());
+			}
+			
+			String format = "%" + entrylen + "d";
+			
+			for (Pair<HostInformation, HostInformation> pair : rtt.keySet()) {
+				HostInformation a = pair.getA();
+				int idxA = hosts.indexOf(a);
+				HostInformation b = pair.getB();
+				int idxB = hosts.indexOf(b);
+				
+				if (idxA < 0 || idxB < 0)
+					throw new NullPointerException("Invalid Indices in getMatrix()");
+				
+				matrix[idxA + 1][idxB + 1] = String.format(format, rtt.get(pair).longValue());
+			}
+			
+			ret = "";
+			for (int i = 0; i <= hosts.size(); i++) {
+				for (int j = 0; j <= hosts.size(); j++) {
+					ret += matrix[i][j] + " ";
+				}
+				ret += "\n";
+			}
+		}
+		return ret;
 	}
 	
 	/**

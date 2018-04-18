@@ -180,24 +180,9 @@ public class Ringo implements Runnable {
 			System.out.println("Enter any of the following commands: show-matrix, show-ring, disconnect");
 			String input = scanner.nextLine();
 			if (input.equalsIgnoreCase("show-matrix")) {
-				System.out.println("\nlegend (maps index to host for columns and rows): \n");
-				System.out.print("\tindex");
-				System.out.println("\thostname:port");
-				for (int i = 0; i < ringSize; i++) {
-					System.out.println("\t" +i+ ":  \t" +this.indexRtt.get(i));
-				}
-
-				System.out.println("\t");
-
-				for (int i = 0; i < this.rtt.length; i++) {
-					for (int j = 0; j < this.rtt.length; j++) {
-						System.out.print("\t" +this.rtt[i][j]+" ");
-					}
-					System.out.println("");
-				}
-				System.out.println("\n");
+				System.out.println(tracker.getMatrix());
 			} else if (input.equalsIgnoreCase("show-ring")) {
-				ArrayList<String> output = generateOptimalRing();
+				ArrayList<String> output = tracker.getRoute();
 
 				System.out.println("\t");
 
