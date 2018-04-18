@@ -1,19 +1,19 @@
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class KeepAlive implements Runnable {
-	public static final int KEEPALIVE_DELAY_MILLIS = 3000;
+	public static final int KEEPALIVE_DELAY_MILLIS = 4000;
 	
 	private LinkedBlockingQueue<RingoPacket> inq;
 	private LinkedBlockingQueue<RingoPacket> outq;
 	private RingTracker tracker;
 	private RingoPacketFactory factory;
-	private HashSet<HostInformation> hosts;
-	private HashSet<HostInformation> toPromote;
+	private Hashtable<HostInformation, Long> times;
 	private TimerTask keepAliveTimer;
 	private Timer timer;
 	
@@ -22,82 +22,67 @@ public class KeepAlive implements Runnable {
 		this.outq = outq;
 		this.factory = factory;
 		this.tracker = tracker;
+		this.times = new Hashtable<>();
 	}
 
 	@Override
 	public void run() {
-		this.hosts = new HashSet<>(tracker.getHosts());
+		// Setup the times Hashtable
+		Iterator<HostInformation> it = tracker.getHosts().iterator();
+		while (it.hasNext()) {
+			HostInformation host = it.next();
+			times.put(host, System.currentTimeMillis());
+		}
+		
 		this.keepAliveTimer = new KeepAliveTimerTask(this, outq, factory);
 		this.timer = new Timer();
-		timer.schedule(this.keepAliveTimer, KEEPALIVE_DELAY_MILLIS);
+		timer.scheduleAtFixedRate(this.keepAliveTimer, KEEPALIVE_DELAY_MILLIS, KEEPALIVE_DELAY_MILLIS);
 		
 		while (true) {
 			try {
 				RingoPacket in = inq.take();
-				if (in.getType() == PacketType.KEEPALIVE_REQ) {
-					// Another Ringo wants an ACK out of us. Send it!
-					RingoPacket res = factory.makePacket(in.getSourceIP(), in.getSourcePort(), 0, 0, PacketType.KEEPALIVE_ACK);
-					outq.put(res);
-				} else if (in.getType() == PacketType.KEEPALIVE_ACK) {
-					toPromote.add(getSelf());
-					synchronized (hosts) {
-						HostInformation other = getHostFromFields(in.getSourceIP(), in.getSourcePort());
-						if (other != null)
-							toPromote.add(other);
+				HostInformation from = getHostFromFields(in.getSourceIP(), in.getSourcePort());
+				if (from == null) {
+					// handle later
+					System.err.println("Invalid HostInformation Found: " + in.getSourceIP() + ":" + in.getSourcePort());
+				} else {
+					synchronized (times) {
+						times.put(from, System.currentTimeMillis());
+						times.put(getSelf(), System.currentTimeMillis());
 					}
 				}
 			} catch (InterruptedException e) {
-				System.err.println("Cannot continue handling KeepAlive: Interrupted");
+				System.err.println("Cannot continue processing Keep-Alive Events: Interrupted");
 			}
 		}
 	}
 	
-	/**
-	 * Call only from KeepAliveTimerTask
-	 * 
-	 * Updates the Tracker with the newly promoted or demoted HostInformations
-	 * @return
-	 */
-	public HashSet<HostInformation> update() {
-		synchronized (hosts) {
-			handlePromotions();
-			toPromote.clear();
-			ArrayList<HostInformation> newhosts = new ArrayList<>(hosts);
-			tracker.setHosts(newhosts);
-			tracker.generateOptimalRing(newhosts);
-			return (HashSet<HostInformation>) hosts.clone();
-		}
+	public synchronized ArrayList<HostInformation> getHosts() {
+		return new ArrayList<HostInformation>(times.keySet());
 	}
 	
-	/**
-	 * Only call in a synchronized block/method
-	 */
-	private void handlePromotions() {
-		@SuppressWarnings("unchecked")
-		HashSet<HostInformation> toDemote = (HashSet<HostInformation>) hosts.clone();
-		toDemote.removeAll(toPromote);
+	public void update() {
+		ArrayList<HostInformation> stale = new ArrayList<>();
+		long staleTime = System.currentTimeMillis() - 2*KEEPALIVE_DELAY_MILLIS;
+		synchronized (times) {
+			Iterator<HostInformation> it = times.keySet().iterator();
+			while (it.hasNext()) {
+				HostInformation cur = it.next();
+				
+				if (times.get(cur).longValue() < staleTime) {
+					System.out.println("Host Considered Stale: " + cur.toString() + times.get(cur));
+					stale.add(cur);
+				}
+			}
+			
+			times.keySet().forEach(host -> {
+				HostState state = (stale.contains(host) ? HostState.DOWN : HostState.UP);
+				tracker.updateHost(host, state);
+			});
+		}
 		
-		HashSet<HostInformation> tmp = new HashSet<>();
-		Iterator<HostInformation> it = hosts.iterator();
-		while (it.hasNext()) {
-			HostInformation host = it.next();
-			
-			// Check if we received any ACK packets. If we haven't, then we're down.
-			if (host.isLocal() && toPromote.isEmpty())
-				host.setState(HostState.DOWN);
-			else if (toPromote.contains(host))
-				host.setState(HostState.promote(host.getState()));
-			else if (toDemote.contains(host))
-				host.setState(HostState.demote(host.getState()));
-			else {
-				System.err.println("HandlePromotions: Unaccounted for state detected: Host not promotable nor demotable");
-				System.err.println("\t" + host.toString());
-			}
-			
-			tmp.add(host);
-		}
-		hosts = tmp;
-	}
+		tracker.makeRingFromFilteredHosts();
+	} 
 	
 	/**
 	 * Searches hosts for a HostInformation that matches the parameters.
@@ -109,7 +94,7 @@ public class KeepAlive implements Runnable {
 	 */
 	private HostInformation getHostFromFields(String hostname, int port) {
 		HostInformation ret = null;
-		for (HostInformation host : hosts) {
+		for (HostInformation host : times.keySet()) {
 			if (host.hostString().equalsIgnoreCase(hostname + ":" + port)) {
 				ret = host;
 				break;
@@ -125,7 +110,7 @@ public class KeepAlive implements Runnable {
 	 */
 	private HostInformation getSelf() {
 		HostInformation ret = null;
-		for (HostInformation host : hosts) {
+		for (HostInformation host : times.keySet()) {
 			if (host.isLocal()) {
 				ret = host;
 				break;

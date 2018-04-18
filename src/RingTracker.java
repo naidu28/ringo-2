@@ -2,6 +2,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Hashtable;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -60,6 +61,24 @@ public class RingTracker {
 	}
 	
 	/**
+	 * Generate Ring from only the active nodes in the hosts List.
+	 * This is a cleaner version of makeRingFromHosts()
+	 */
+	public void makeRingFromFilteredHosts() {
+		ArrayList<HostInformation> clean = new ArrayList<>();
+		synchronized (hosts) {
+			Iterator<HostInformation> it = hosts.iterator();
+			while (it.hasNext()) {
+				HostInformation host = it.next();
+				if (host.isActive())
+					clean.add(host);
+			}
+			
+			generateOptimalRing(clean);
+		}
+	}
+	
+	/**
 	 * Updates the Ring structure from some list of active hosts
 	 * @param activeHosts List of active Ringos to use for Ring generation
 	 */
@@ -77,7 +96,7 @@ public class RingTracker {
 			}
 		}
 		
-		System.out.println("OPTIMAL RING COST:\t" + lowestCost.getA().longValue());
+		 // System.out.println("OPTIMAL RING COST:\t" + lowestCost.getA().longValue());
 		
 		synchronized (ring) {
 			ring = lowestCost.getB();

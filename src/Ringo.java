@@ -844,8 +844,7 @@ public class Ringo implements Runnable {
 					responseOut.setRttIndex(Ringo.this.rttIndex);
 					responseOut.setIndexRtt(Ringo.this.indexRtt);
 					Ringo.this.sendQueue.add(responseOut);
-				} else if (packet.getType() == PacketType.KEEPALIVE_REQ 
-						|| packet.getType() == PacketType.KEEPALIVE_ACK) {
+				} else if (packet.getType() == PacketType.KEEPALIVE) {
 					this.keepAliveQueue.add(packet);
 				} else {
 					this.packetQueue.add(packet);

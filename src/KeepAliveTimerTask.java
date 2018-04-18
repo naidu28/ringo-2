@@ -1,3 +1,4 @@
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
@@ -19,27 +20,19 @@ public class KeepAliveTimerTask extends TimerTask {
 
 	@Override
 	public void run() {
-		HashSet<HostInformation> hosts = keepAlive.update();
-		Iterator<HostInformation> it = hosts.iterator();
-		try {
-			while (it.hasNext()) {
-				HostInformation host = it.next();
-				if (host.isLocal())
-					continue;
-				
+		ArrayList<HostInformation> hosts = keepAlive.getHosts();
+		hosts.forEach(host -> {
+			try {
 				out.put(createReq(host));
-				if (host.getState() != HostState.UP) {
-					for (int i = 0; i < TIMEOUT_REPEATS; i++)
-						out.put(createReq(host));
-				}
+			} catch (InterruptedException e) {
+				System.err.println("Unable to send KeepAlive notifications: Interrupted");
 			}
-		} catch (InterruptedException e) {
-			System.out.println("Could not process Hosts queue in Keepalive Timer: Interrupted");
-		}
+		});
+		keepAlive.update();
 	}
 	
 	private RingoPacket createReq(HostInformation info) {
-		return factory.makePacket(info.getHost(), info.getPort(), 0, 0, PacketType.KEEPALIVE_REQ);
+		return factory.makePacket(info.getHost(), info.getPort(), 0, 0, PacketType.KEEPALIVE);
 	}
 
 }
