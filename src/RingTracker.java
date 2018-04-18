@@ -12,6 +12,12 @@ public class RingTracker {
 	private int n;
 	private ArrayList<HostInformation> ring;
 	
+	/**
+	 * Tracks the Ring structure, Ringo statuses, and RTTs for all Ringos in the Ring.
+	 * @param me The host:port for THIS Ringo. Equivalent to Ringo.localname:Ringo.localport
+	 * @param rtt rtt array from Ringo
+	 * @param indexRTT 
+	 */
 	public RingTracker(String me, long[][] rtt, Hashtable<Integer, String> indexRTT) {
 		hosts = new ArrayList<HostInformation>();
 		this.rtt = new Hashtable<Pair<HostInformation, HostInformation>, Long>();
@@ -44,12 +50,20 @@ public class RingTracker {
 		makeRingFromHosts();
 	}
 	
+	/**
+	 * Takes the entire hosts ArrayList, and generates a Ring from that.
+	 * Only do this when you are confident that every host in the hosts list is valid!
+	 */
 	public void makeRingFromHosts() {
 		synchronized (hosts) {
 			generateOptimalRing(hosts);
 		}
 	}
 	
+	/**
+	 * Updates the Ring structure from some list of active hosts
+	 * @param activeHosts List of active Ringos to use for Ring generation
+	 */
 	public void generateOptimalRing(ArrayList<HostInformation> activeHosts) {
 		// generate every possible path
 		List<Pair<Long, ArrayList<HostInformation>>> costs = new ArrayList<>();
@@ -74,6 +88,10 @@ public class RingTracker {
 		}
 	}
 	
+	/**
+	 * Fetches the next Ringo in the Ring, if there is one.
+	 * @return might return null if there is no valid local Ringo.
+	 */
 	public HostInformation getNextRingo() {
 		synchronized (ring) {
 			int i = 0;
@@ -86,15 +104,28 @@ public class RingTracker {
 		}
 	}
 	
+	/**
+	 * Returns a clone of the current Hosts list.
+	 * It's important that this is a clone, or you might run into concurrency issues
+	 * @return
+	 */
 	@SuppressWarnings("unchecked")
 	public synchronized ArrayList<HostInformation> getHosts() {
 		return (ArrayList<HostInformation>) hosts.clone();
 	}
 	
+	/**
+	 * Assigns the hosts array from KeepAlive
+	 * @param hosts
+	 */
 	public synchronized void setHosts(ArrayList<HostInformation> hosts) {
 		this.hosts = hosts;
 	}
 	
+	/**
+	 * Returns the Ring as a list of hostname:port Strings
+	 * @return
+	 */
 	public ArrayList<String> getRoute() {
 		synchronized (ring) {
 			return ring
@@ -104,6 +135,11 @@ public class RingTracker {
 		}
 	}
 	
+	/**
+	 * Updates a single Host in hosts. Not for adding new hosts!
+	 * @param host
+	 * @param state
+	 */
 	public void updateHost(HostInformation host, HostState state) {
 		if (host == null) 
 			throw new IllegalArgumentException("Cannot call updateHost with null host");
@@ -119,6 +155,11 @@ public class RingTracker {
 		}
 	}
 	
+	/**
+	 * Checks to see if some host is online or not
+	 * @param hostString
+	 * @return
+	 */
 	public boolean isOnline(String hostString) {
 		if (hostString == null || hostString.isEmpty())
 			return false;
@@ -134,6 +175,11 @@ public class RingTracker {
 		}
 	}
 	
+	/**
+	 * Only call from within a synchronized block! Finds the cost of a TSP path
+	 * @param path
+	 * @return
+	 */
 	private long findCost(List<HostInformation> path) {
 		long cost = 0;
 		// convert HostInformations to list of pairs
@@ -157,6 +203,14 @@ public class RingTracker {
 		return cost;
 	}
 	
+	/**
+	 * Only call from within a synchronized block! Finds all possible TSP paths,
+	 * and updates ring with the cheapest one 
+	 * 
+	 * @param curr List to permute
+	 * @param k    Index to start permuting from
+	 * @param dst  A list of Cost-Path Pairs. Pair element A is the cost, Pair element B is the path
+	 */
 	private void permute(ArrayList<HostInformation> curr, int k, List<Pair<Long, ArrayList<HostInformation>>> dst) {
 		for (int i = k; i < curr.size(); i++) {
 			Collections.swap(curr,  i,  k);
@@ -184,6 +238,12 @@ public class RingTracker {
 		return requested.isActive();
 	}
 	
+	/**
+	 * Only call from a synchronized block! Searches hosts for an element that matches the param
+	 * @param key hostname:port String
+	 * @return Will return host, or error out
+	 * @throws IllegalArgumentException HostInformation with given key not found
+	 */
 	private HostInformation getInfoByHoststring(String key) {
 		String host = key.split(":")[0];
 		int port = Integer.parseInt(key.split(":")[1]);

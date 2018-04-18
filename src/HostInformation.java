@@ -5,6 +5,14 @@ public class HostInformation {
 	private String host;
 	private int port;
 
+	/**
+	 * A Partially immutable representation of the members of the Ring. Only state is mutable.
+	 * 
+	 * @param state MUTABLE state of Ringo
+	 * @param local does this HostInformation represent THIS Ringo/David?
+	 * @param host 
+	 * @param port 
+	 */
 	public HostInformation(HostState state, boolean local, String host, int port) {
 		this.state = state;
 		this.local = local;
@@ -12,6 +20,11 @@ public class HostInformation {
 		this.port = port;
 	}
 
+	/**
+	 * A host is considered alive, even if it failed one round of KeepAlive.
+	 * This is not necessarily the case for the local Ringo
+	 * @return true if the Host is up
+	 */
 	public boolean isActive() {
 		return !(state == HostState.DOWN);
 	}
@@ -36,6 +49,10 @@ public class HostInformation {
 		return port;
 	}
 	
+	/**
+	 * 
+	 * @return The hostname and port of the Ringo, in hostname:port layout
+	 */
 	public String hostString() {
 		return host + ":" + port;
 	}
@@ -67,6 +84,9 @@ public class HostInformation {
 		return false;
 	}
 	
+	/**
+	 * The only important part of this class is the hostname and port. The rest is metadata.
+	 */
 	public int hashCode() {
 		return hostString().hashCode();
 	}

@@ -10,6 +10,8 @@ public class RingoPacketFactory {
 	 * Class responsible for filling in the parameters of RingoPacket that are kept
 	 * static throughout the execution of the program.
 	 * 
+	 * This is meant to save you parameters when sending packets.
+	 * 
 	 * @param myIP IP Address of this Ringo
 	 * @param myPort Port of this Ringo
 	 * @param myRole Role of this Ringo

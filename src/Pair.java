@@ -4,6 +4,11 @@ public class Pair<T, U> {
 	private T a;
 	private U b;
 	
+	/**
+	 * Constructs a pair of two non-null items. Immutable.
+	 * @param a
+	 * @param b
+	 */
 	public Pair(T a, U b) {
 		this.a = a;
 		this.b = b;
@@ -42,6 +47,9 @@ public class Pair<T, U> {
 		return false;
 	}
 	
+	/**
+	 * Two prime numbers were chosen for A and B.
+	 */
 	public int hashCode() {
 		return 56 + (a.hashCode() * 17) + (b.hashCode() * 41); 
  	}

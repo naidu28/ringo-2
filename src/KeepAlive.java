@@ -52,6 +52,12 @@ public class KeepAlive implements Runnable {
 		}
 	}
 	
+	/**
+	 * Call only from KeepAliveTimerTask
+	 * 
+	 * Updates the Tracker with the newly promoted or demoted HostInformations
+	 * @return
+	 */
 	public HashSet<HostInformation> update() {
 		synchronized (hosts) {
 			handlePromotions();
@@ -63,6 +69,9 @@ public class KeepAlive implements Runnable {
 		}
 	}
 	
+	/**
+	 * Only call in a synchronized block/method
+	 */
 	private void handlePromotions() {
 		@SuppressWarnings("unchecked")
 		HashSet<HostInformation> toDemote = (HashSet<HostInformation>) hosts.clone();
@@ -90,6 +99,14 @@ public class KeepAlive implements Runnable {
 		hosts = tmp;
 	}
 	
+	/**
+	 * Searches hosts for a HostInformation that matches the parameters.
+	 * Only call within a synchronized block or method
+	 * 
+	 * @param hostname Source Hostname from RingoPacket
+	 * @param port Source Port from RingoPacket
+	 * @return 
+	 */
 	private HostInformation getHostFromFields(String hostname, int port) {
 		HostInformation ret = null;
 		for (HostInformation host : hosts) {
@@ -101,6 +118,11 @@ public class KeepAlive implements Runnable {
 		return ret;
 	}
 	
+	/**
+	 * Searches hosts for a HostInformation that is local. There should only be one of these!
+	 * Only call within a synchronized block or method
+	 * @return
+	 */
 	private HostInformation getSelf() {
 		HostInformation ret = null;
 		for (HostInformation host : hosts) {
