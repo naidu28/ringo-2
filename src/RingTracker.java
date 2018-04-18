@@ -213,7 +213,7 @@ public class RingTracker {
 		synchronized (hosts) {
 			for (HostInformation ringo : hosts) {
 				if (ringo.getHost().equals(host) && ringo.getPort() == port)
-					return true;
+					return ringo.isActive();
 			}
 			return false;
 		}
