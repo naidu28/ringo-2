@@ -58,6 +58,7 @@ public class KeepAlive implements Runnable {
 			toPromote.clear();
 			ArrayList<HostInformation> newhosts = new ArrayList<>(hosts);
 			tracker.setHosts(newhosts);
+			tracker.generateOptimalRing(newhosts);
 			return (HashSet<HostInformation>) hosts.clone();
 		}
 	}
