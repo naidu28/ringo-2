@@ -70,7 +70,6 @@ public class KeepAlive implements Runnable {
 				HostInformation cur = it.next();
 				
 				if (times.get(cur).longValue() < staleTime) {
-					System.out.println("Host Considered Stale: " + cur.toString() + times.get(cur));
 					stale.add(cur);
 				}
 			}

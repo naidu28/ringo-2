@@ -177,7 +177,7 @@ public class Ringo implements Runnable {
 		keepAliveThread.start();
 
 		while (true) {
-			System.out.println("Enter any of the following commands: show-matrix, show-ring, disconnect");
+			System.out.println("Enter any of the following commands: show-matrix, show-ring, show-next, disconnect");
 			String input = scanner.nextLine();
 			if (input.equalsIgnoreCase("show-matrix")) {
 				System.out.println(tracker.getMatrix());
@@ -193,6 +193,8 @@ public class Ringo implements Runnable {
 						System.out.println(output.get(i));
 				}
 				System.out.println("");
+			} else if (input.equalsIgnoreCase("show-next")) {
+				System.out.println(tracker.getNextRingo().hostString());
 			} else if (input.equalsIgnoreCase("disconnect")) {
 				netIn.interrupt();
 				netOut.interrupt();
