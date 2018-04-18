@@ -5,3 +5,7 @@
 \.classpath
 
 \.settings/
+
+bin/daphne-and-me\.jpg
+
+bin/sample-received\.txt
