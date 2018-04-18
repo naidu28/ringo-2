@@ -11,6 +11,7 @@ import java.lang.Thread;
 import java.util.Scanner;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.Date;
@@ -43,6 +44,8 @@ public class Ringo implements Runnable {
 	private long [][] rtt;
 	private LinkedBlockingQueue<RingoPacket> recvQueue;
 	private LinkedBlockingQueue<RingoPacket> sendQueue;
+	private LinkedBlockingQueue<String> sendFileList;
+	private LinkedBlockingQueue<String> outputQueue;
 	private ArrayList<String> ringRoute;
 
 	/**
@@ -85,6 +88,8 @@ public class Ringo implements Runnable {
 		}
 		this.recvQueue = new LinkedBlockingQueue<RingoPacket>();
 		this.sendQueue = new LinkedBlockingQueue<RingoPacket>();
+		this.sendFileList = new LinkedBlockingQueue<String>();
+		this.outputQueue = new LinkedBlockingQueue<String>();
 		this.ringRoute = null;
 	}
 
@@ -174,65 +179,84 @@ public class Ringo implements Runnable {
 	}
 	
 	private void executionLoop(Thread netIn, Thread netOut) {
-		WorkerThread workerObject = new WorkerThread(this.role, this.sendQueue, this.recvQueue, this.ringRoute, this.localName, this.localPort);
+		WorkerThread workerObject = new WorkerThread(this.role, this.sendQueue, this.recvQueue, this.ringRoute, this.localName, this.localPort, this.sendFileList, this.outputQueue);
 		Thread worker = new Thread(workerObject);
 		worker.start();
 		
 		while (true) {
 			System.out.println("Enter any of the following commands: show-matrix, show-ring, disconnect");
-			if (!this.userCommandList.isEmpty()) {
-				String command = "";
+			String command = "";
+			
+			Scanner scanner = new Scanner(System.in);
+			//while (scanner.hasNext()) {
+			command = scanner.nextLine();
+			//}
+			//if (!this.userCommandList.isEmpty()) {
+			/*try {
+				command = this.userCommandList.take();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}*/
+			
+			// System.out.println("results of le split: " +command.split(" ")[0]);
+			if (command.equals("")) {
 				try {
-					command = this.userCommandList.take();
+					Thread.sleep(1000);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
-				
-				if (command.split(" ")[0].equalsIgnoreCase("offline")) {
-					System.out.println("\n");
-				} else if (command.split(" ")[0].equalsIgnoreCase("send")) {
-					if (this.role != Role.SENDER) {
-						System.out.println("Unfortunately this is not a SENDER ringo; Try again from the SENDER ringo");
+			}
+			
+			if (command.split(" ")[0].equalsIgnoreCase("offline")) {
+				System.out.println("\n");
+			} else if (command.split(" ")[0].equalsIgnoreCase("send")) {
+				if (this.role != Role.SENDER) {
+					System.out.println("Unfortunately this is not a SENDER ringo; Try again from the SENDER ringo");
+				} else {
+					if (command.split(" ").length > 1) {
+						System.out.println("reached here");
+						this.sendFileList.add(command.split(" ")[1]);
 					} else {
-						workerObject.setFilePath(command.split(" ")[1]);
+						System.out.println("You did not provide enough arguments for SEND.");
 					}
-				} else if (command.equalsIgnoreCase("show-matrix")) {
-					System.out.println("\nlegend (maps index to host for columns and rows): \n");
-					System.out.print("\tindex");
-					System.out.println("\thostname:port");
-					for (int i = 0; i < ringSize; i++) {
-						System.out.println("\t" +i+ ":  \t" +this.indexRtt.get(i));
-					}
-	
-					System.out.println("\t");
-	
-					for (int i = 0; i < this.rtt.length; i++) {
-						for (int j = 0; j < this.rtt.length; j++) {
-							System.out.print("\t" +this.rtt[i][j]+" ");
-						}
-						System.out.println("");
-					}
-					System.out.println("\n");
-				} else if (command.equalsIgnoreCase("show-ring")) {
-					ArrayList<String> output = this.ringRoute;
-	
-					System.out.println("\t");
-	
-					for (int i = 0; i < output.size(); i++) {
-						if (i != output.size() - 1)
-							System.out.print(output.get(i)+" -> ");
-						else
-							System.out.println(output.get(i));
+				}
+			} else if (command.equalsIgnoreCase("show-matrix")) {
+				System.out.println("\nlegend (maps index to host for columns and rows): \n");
+				System.out.print("\tindex");
+				System.out.println("\thostname:port");
+				for (int i = 0; i < ringSize; i++) {
+					System.out.println("\t" +i+ ":  \t" +this.indexRtt.get(i));
+				}
+
+				System.out.println("\t");
+
+				for (int i = 0; i < this.rtt.length; i++) {
+					for (int j = 0; j < this.rtt.length; j++) {
+						System.out.print("\t" +this.rtt[i][j]+" ");
 					}
 					System.out.println("");
-				} else if (command.equalsIgnoreCase("disconnect")) {
-					netIn.interrupt();
-					netOut.interrupt();
-					return;
-				} else {
-					System.out.println("Sorry, but your input was invalid. Try again.");
 				}
+				System.out.println("\n");
+			} else if (command.equalsIgnoreCase("show-ring")) {
+				ArrayList<String> output = this.ringRoute;
+
+				System.out.println("\t");
+
+				for (int i = 0; i < output.size(); i++) {
+					if (i != output.size() - 1)
+						System.out.print(output.get(i)+" -> ");
+					else
+						System.out.println(output.get(i));
+				}
+				System.out.println("");
+			} else if (command.equalsIgnoreCase("disconnect")) {
+				netIn.interrupt();
+				netOut.interrupt();
+				return;
+			} else {
+				System.out.println("Sorry, but your input was invalid. Try again.");
 			}
+			//}
 		}
 	}
 
@@ -726,6 +750,9 @@ public class Ringo implements Runnable {
 			RingoPacket packet = (RingoPacket) iter.next();
 			if (packet.getType() == type && packet.getSourceIP().equals(hostname) && packet.getSourcePort() == port) {
 				iter.remove();
+				if (packet.getType() == PacketType.DATA) {
+					System.out.println("data packet: " +packet.getSequenceNumber());
+				}
 				return packet;
 			}
 		}
@@ -853,7 +880,7 @@ public class Ringo implements Runnable {
 		}
 
 		private DatagramPacket receive() throws IOException {
-			byte[] data = new byte[10000];
+			byte[] data = new byte[20000];
 			DatagramPacket packet = new DatagramPacket(data, data.length);
 			Ringo.this.socket.receive(packet);
 			return packet;
@@ -875,6 +902,12 @@ public class Ringo implements Runnable {
 					responseOut.setRttIndex(Ringo.this.rttIndex);
 					responseOut.setIndexRtt(Ringo.this.indexRtt);
 					Ringo.this.sendQueue.add(responseOut);
+				} else if (packet.getType() == PacketType.DATA) {
+					// System.out.println("Received DATA packet sequence number: " +packet.getSequenceNumber());
+					this.packetQueue.add(packet);
+				} else if (packet.getType() == PacketType.DATA_ACK) {
+					// System.out.println("Received DATA_ACK packet sequence number: " +packet.getSequenceNumber());
+					this.packetQueue.add(packet);
 				} else {
 					this.packetQueue.add(packet);
 				}
@@ -923,6 +956,9 @@ public class Ringo implements Runnable {
 				RingoPacket packet = dequeue();
 				if (packet != null) {
 					// System.out.println("current time start: " +System.currentTimeMillis());
+					if (packet.getType() == PacketType.DATA) {
+						System.out.println("Sent DATA packet sequence number: " +packet.getSequenceNumber());
+					}
 					replaceDuplicates(packet);
 					packet.setStartTime(System.currentTimeMillis());
 					byte [] data = RingoPacket.serialize(packet);
@@ -989,92 +1025,57 @@ public class Ringo implements Runnable {
 		private LinkedBlockingQueue<RingoPacket> recvQueue;
 		private ArrayList<String> route;
 		private String localName;
-		private RingoPacket [] window;
-		private boolean [] accepted;
-		private int highestSequenceAccepted;
 		private int localPort;
-		private String filePath;
-		private boolean readyToSend;
+		private RingoPacket [] window;
+		private RingoPacket [] file;
 		
-		public WorkerThread(Role role, LinkedBlockingQueue<RingoPacket> sendQueue, LinkedBlockingQueue<RingoPacket> recvQueue, ArrayList<String> route, String localName, int localPort) {
+		private boolean [] accepted;
+		private RingoPacket [] acks;
+		private int highestSequenceAccepted;
+		private LinkedBlockingQueue<String> sendFileList;
+		private LinkedBlockingQueue<String> outputQueue;
+		
+		public WorkerThread(Role role, LinkedBlockingQueue<RingoPacket> sendQueue, LinkedBlockingQueue<RingoPacket> recvQueue, ArrayList<String> route, String localName, int localPort, LinkedBlockingQueue<String> sendFileList, LinkedBlockingQueue<String> outputQueue) {
 			this.role = role;
 			this.sendQueue = sendQueue;
 			this.recvQueue = recvQueue;
 			this.route = route;
+			this.localName = localName;
+			this.localPort = localPort;
 			this.window = new RingoPacket[50];
 			this.accepted = new boolean[window.length];
-			this.highestSequenceAccepted = 0;
+			this.acks = new RingoPacket[window.length];
+			this.sendFileList = sendFileList;
+			this.outputQueue = outputQueue;
 		}
 		
 		public void run() {
+			// System.out.println("this code should be printed out continuously");
 			while (true) {
+				// System.out.println("I assume you've been reached");
 				// starts sending a file if this node is SENDER and this node has a file to send
 				if (this.role == Role.SENDER) {
-					if (this.readyToSend) {
-						sendFile(filePath);
-						this.readyToSend = false;
+					// System.out.println("yo");
+					if (!this.sendFileList.isEmpty()) {
+						System.out.println("2");
+						sendFile(this.sendFileList.poll());
 					}
 				}
 				
 				// transfer packets from receive queue to send queue
-				transferFile();
+				try {
+					transportFile();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
 			}
 		}
 		
-		public void setFilePath(String filePath) {
-			this.filePath = filePath;
-			this.readyToSend = true;
-		}
-		
-		private void transferFile() {
-			System.out.println("1");
-			String prevHost = "";
-			int prevPort = -1;
-			
-			String nextHost = "";
-			int nextPort = -1;
-			
-			for (int i = 1; i < this.route.size(); i++) {
-				if (this.route.get(i) == this.localName +":"+ this.localPort) {
-					prevHost = this.route.get(i - 1).substring(0, this.route.get(i - 1).indexOf(":"));
-					prevPort = Integer.parseInt(this.route.get(i).substring(this.route.get(i - 1).indexOf(":")));
-					
-					nextHost = this.route.get((i + 1)%this.route.size()).substring(0, this.route.get((i + 1)%this.route.size()).indexOf(":"));
-					nextPort = Integer.parseInt(this.route.get((i + 1)%this.route.size()).substring(this.route.get((i + 1)%this.route.size()).indexOf(":")));
-				}
-			}
-			
-			int highestAck = -1;
-			while (highestAck < this.window[0].getSequenceLength() - 1) {
-				receiveWindow(prevHost, prevPort, nextHost, nextPort);
-				highestAck = transmitWindow(this.window);
-			}
-		}
-		
-		private void receiveWindow(String prevHost, int prevPort, String nextHost, int nextPort) {
-			while (highestSequenceAccepted != accepted.length) {
-				RingoPacket filePacket = takeSpecific(this.recvQueue, PacketType.DATA, prevHost, prevPort);
-				while (filePacket == null) {
-					filePacket = takeSpecific(this.recvQueue, PacketType.DATA, prevHost, prevPort);
-				}
-				
-				filePacket.setSourceIP(prevHost);
-				filePacket.setSourcePort(prevPort);
-				filePacket.setDestIP(nextHost);
-				filePacket.setDestPort(nextPort);
-				this.window[filePacket.getSequenceNumber()%this.window.length] = filePacket;
-				this.accepted[filePacket.getSequenceNumber()%this.window.length] = true;
-				while (this.highestSequenceAccepted < this.accepted.length && this.accepted[this.highestSequenceAccepted] == true) {
-					this.highestSequenceAccepted++;
-				}
-			}
-			
-		}
-	
 		// used by SENDER
 		private void sendFile(String filepath) {
 			File file = new File(filepath);
-			Hashtable<String, Boolean> windowAckList = new Hashtable<String, Boolean>();
+			// Hashtable<String, Boolean> windowAckList = new Hashtable<String, Boolean>();
+			System.out.println("file: " + file);
 			
 			try {
 				FileInputStream fileReader;
@@ -1084,47 +1085,332 @@ public class Ringo implements Runnable {
 				byte [] data = new byte[10000];
 				
 				while (fileReader.read(data) != -1) {
-					RingoPacket toSend = createSendPacket(data, seqNumber, file.length()/10000);
+					Long seqLength = (long)Math.ceil(file.length()/10000.0);
+					RingoPacket toSend = this.createSendPacket(data, seqNumber, seqLength);
+					toSend.setFileName(filepath);
 					this.window[seqNumber%this.window.length] = toSend;
 					if (seqNumber%this.window.length == this.window.length - 1) {
 						// communication didn't work, check if churn is occurring
 						// if next node is churn'ed, flip route in data structure
-						if (transmitWindow(this.window) != this.window[this.window.length - 1].getSequenceNumber()) {
-							// if (!this.keepAlive.isAlive(window[0].getDestIP(), window[0].getDestPort())) {
-							// check if churn is happening
-							
-							// if churn is occurring, use this if statement
-							/*if (true) {
-								fileReader = new FileInputStream(file);
-								seqNumber = 0;
-							}*/
-							
-							// if churn is not occurring, try again from beginning of window
-							if (true) {
-								seqNumber = seqNumber - 50;
+						System.out.println("11");
+						
+						try {
+							if (transmitWindow(this.window, seqLength.intValue()) != this.window[this.window.length - 1].getSequenceNumber()) {
+								// if (!this.keepAlive.isAlive(window[0].getDestIP(), window[0].getDestPort())) {
+								// check if churn is happening
+								
+								// if churn is occurring, use this if statement
+								/*if (true) {
+									fileReader = new FileInputStream(file);
+									seqNumber = 0;
+								}*/
+								
+								// if churn is not occurring, try again from beginning of window
+								System.out.println("y");
+								if (true) {
+									seqNumber = seqNumber - window.length;
+								}
 							}
+						} catch (Exception e) {
+							e.printStackTrace();
 						}
 					}
 					seqNumber++;
 				}
-			} catch (Exception e) {
 				
+				try {
+					while (transmitWindow(this.window, (seqNumber - 1)%this.window.length) != this.window[(seqNumber - 1)%this.window.length].getSequenceNumber()) {
+						// if churn not occurring
+						if (true) {
+							seqNumber = seqNumber - window.length;
+						}
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+				
+		private RingoPacket createSendPacket(byte [] data, int seqNumber, long seqLength) {
+			// need to define a keep-alive method that returns the next host name and port
+			// RingoPacket toSend = new RingoPacket(this.localName, this.localPort, this.keepAlive.nextHost, this.keepAlive.nextPort, 0, seqNumber, PacketType.DATA, this.role, this.ringSize);
+			System.out.println("3");
+			String next = getNextRingo();
+			
+			RingoPacket toSend;
+			
+			if (data == null) {
+				System.out.println("6");
+				toSend = new RingoPacket(this.localName, this.localPort, next.substring(0, next.indexOf(":")), Integer.parseInt(next.substring(next.indexOf(":") + 1)), seqLength, seqNumber, PacketType.DATA, this.role, 0);
+			} else {
+				System.out.println("7 + next: " +next);
+				toSend = null;
+				try {
+					toSend = new RingoPacket(this.localName, this.localPort, next.substring(0, next.indexOf(":")), Integer.parseInt(next.substring(next.indexOf(":") + 1)), seqLength, seqNumber, PacketType.DATA, this.role, 0);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				System.out.println("9");
+				toSend.setPayload(data);
+				System.out.println("10");
+			}
+			
+			System.out.println("8");
+			return toSend;
+		}
+		
+		private void transportFile() {
+			// if there is a DATA packet in the receiveQueue
+			// finishing FORWARDING or RECEIVING entire file
+			// if ANY:
+				// every time a DATA packet is received, return the "highestSequenceAck"
+				// stop when highestSequenceAck is >= seqLength - 1
+			// if RECEIVING:
+				// receive DATA packets and store in file object
+			// if FORWARDING:
+				// once enough DATA packets to fill up window are acquired, call transmitWindow
+			// System.out.println("z");
+			
+			String lastRingo = getPrevRingo();
+			RingoPacket filePacket = takeSpecific(this.recvQueue, PacketType.DATA, lastRingo.substring(0, lastRingo.indexOf(":")), Integer.parseInt(lastRingo.substring(lastRingo.indexOf(":") + 1)));
+			if (filePacket == null) {
+				lastRingo = getNextRingo();
+				filePacket = takeSpecific(this.recvQueue, PacketType.DATA, lastRingo.substring(0, lastRingo.indexOf(":")), Integer.parseInt(lastRingo.substring(lastRingo.indexOf(":") + 1)));
+			}
+			
+			if (filePacket != null) {
+				System.out.println("a");
+				int ackNum = filePacket.getSequenceNumber();
+				Long seqLength = filePacket.getSequenceLength();
+				boolean [] accepted = new boolean[seqLength.intValue()];
+				this.window = new RingoPacket[50];
+				this.file = new RingoPacket[seqLength.intValue()];
+				String fileName = filePacket.getFileName();
+				System.out.println("b");
+				System.out.println(filePacket + " and its ack num: " +ackNum+ " and its sequence length: " +seqLength);
+				
+				while (ackNum < seqLength) {
+					System.out.println("c");
+					// update data structures to show that we've obtained a DATA packet
+					accepted[filePacket.getSequenceNumber()] = true;
+					this.window[filePacket.getSequenceNumber()%this.window.length] = filePacket;
+					
+					// create an ack for this data packet
+					RingoPacket ack = createAck(filePacket, ackNum);
+					System.out.println("ack being sent: " +ack);
+					System.out.println("ack number: " +ack.getSequenceNumber());
+					this.sendQueue.add(ack);
+					
+					// update ack
+					ackNum = assignAckNum(ackNum, accepted);
+					
+					//Role-specific logic
+					// if receiver:
+					if (this.role == Role.RECEIVER) {
+						this.file[filePacket.getSequenceNumber()] = filePacket;
+					} else if (this.role == Role.FORWARDER) {
+						//
+					}
+					
+					// get the next data packet in the sequence
+					filePacket = takeSpecific(this.recvQueue, PacketType.DATA, lastRingo.substring(0, lastRingo.indexOf(":")), Integer.parseInt(lastRingo.substring(lastRingo.indexOf(":") + 1)));
+					while (filePacket == null) {
+						if (ackNum > seqLength) {
+							break;
+						}
+						
+						filePacket = takeSpecific(this.recvQueue, PacketType.DATA, lastRingo.substring(0, lastRingo.indexOf(":")), Integer.parseInt(lastRingo.substring(lastRingo.indexOf(":") + 1)));
+					}
+					
+					System.out.println("ackNum: " +ackNum);
+					System.out.println("seqLength: " +seqLength);
+				}
+				
+				System.out.println("finished receiving file");
+				if (this.role == Role.RECEIVER) {
+					writeFile(fileName);
+				}
 			}
 		}
 		
+		private void writeFile(String fileName) {
+			FileOutputStream fop = null;
+			File file;
+			
+			try {
+				file = new File(fileName.substring(0, fileName.indexOf(".")) + "-received" + fileName.substring(fileName.indexOf(".")));
+				fop = new FileOutputStream(file, true);
+
+				// if file doesnt exists, then create it
+				if (!file.exists()) {
+					file.createNewFile();
+				}
+
+				for (int i = 0; i < this.file.length; i++) {
+					fop.write(this.file[i].getPayload());
+				}
+				
+				fop.flush();
+				fop.close();
+
+				System.out.println("Done");
+
+			} catch (IOException e) {
+				e.printStackTrace();
+			} finally {
+				try {
+					if (fop != null) {
+						fop.close();
+					}
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		
+		private int assignAckNum(int ackNum, boolean [] accepted) {
+			while (ackNum < accepted.length && accepted[ackNum] != false) {
+				ackNum++;
+			}
+			
+			return ackNum;
+		}
+		
+		private RingoPacket createAck(RingoPacket base, int ackNum) {
+			RingoPacket ack = new RingoPacket(this.localName, this.localPort, base.getSourceIP(), base.getSourcePort(), base.getSequenceLength(), ackNum, PacketType.DATA_ACK, this.role, 0);
+			return ack;
+		}
+		
+		// gets previous ringo in route arraylist
+		private String getPrevRingo() {
+			if (this.route.get(0).equals(this.localName + ":" + this.localPort)) {
+				return this.route.get(this.route.size() - 1);
+			}
+			
+			for (int i = 1; i < this.route.size(); i++) {
+				if (this.route.get(i).equals(this.localName + ":" + this.localPort)) {
+					return this.route.get(i - 1);
+				}
+			}
+			
+			return "";
+		}
+		
+		// gets next ringo in route arraylist
+		private String getNextRingo() {			
+			for (int i = 0; i < this.route.size() - 1; i++) {
+				if (this.route.get(i).equals(this.localName + ":" + this.localPort)) {
+					return this.route.get(i + 1);
+				}
+			}
+			
+			if (this.route.get(this.route.size() - 1).equals(this.localName + ":" + this.localPort)) {
+				return this.route.get(0);
+			}
+			
+			return "";
+		}
+		
+		/*private void transferFile() {
+			System.out.println("1");
+			String prevHost = "";
+			int prevPort = -1;
+			
+			String nextHost = "";
+			int nextPort = -1;
+			
+			System.out.println("2");
+			for (int i = 1; i < this.route.size(); i++) {
+				if (this.route.get(i) == this.localName +":"+ this.localPort) {
+					prevHost = this.route.get(i - 1).substring(0, this.route.get(i - 1).indexOf(":"));
+					prevPort = Integer.parseInt(this.route.get(i).substring(this.route.get(i - 1).indexOf(":")));
+					
+					nextHost = this.route.get((i + 1)%this.route.size()).substring(0, this.route.get((i + 1)%this.route.size()).indexOf(":"));
+					nextPort = Integer.parseInt(this.route.get((i + 1)%this.route.size()).substring(this.route.get((i + 1)%this.route.size()).indexOf(":") + 1));
+				}
+			}
+			
+			System.out.println("3");
+			// System.out.println(this.window[0]);
+			int highestAck = 0;
+			
+			try {
+				if (this.accepted[0] == false) {
+					System.out.println("20");
+					int lastIndex = receiveWindow(prevHost, prevPort, nextHost, nextPort);
+					System.out.println("30");
+					if (this.accepted[0] == true) 
+						highestAck = transmitWindow(this.window, lastIndex);
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			
+			System.out.println("4");
+			
+			
+			while (accepted[0] == true && highestAck < this.window[0].getSequenceLength() - 1) {
+				int lastIndex = receiveWindow(prevHost, prevPort, nextHost, nextPort);
+				highestAck = transmitWindow(this.window, lastIndex);
+			}
+			
+			System.out.println("5");
+		}*/
+		
+		/*private int receiveWindow(String prevHost, int prevPort, String nextHost, int nextPort) {
+			try {
+				RingoPacket filePacket = takeSpecific(this.recvQueue, PacketType.DATA, prevHost, prevPort);
+				
+				if (filePacket != null) {
+					this.highestSequenceAccepted = filePacket.getSequenceNumber();
+					while (this.highestSequenceAccepted < filePacket.getSequenceLength() && this.highestSequenceAccepted - filePacket.getSequenceNumber() < this.window.length) {
+						filePacket.setSourceIP(prevHost);
+						filePacket.setSourcePort(prevPort);
+						filePacket.setDestIP(nextHost);
+						filePacket.setDestPort(nextPort);
+						this.window[filePacket.getSequenceNumber()%this.window.length] = filePacket;
+						this.acks[filePacket.getSequenceNumber()%this.window.length] = filePacket;
+						this.accepted[filePacket.getSequenceNumber()%this.window.length] = true;
+						
+						int ackSeqCount = 0;
+						while (ackSeqCount < this.accepted.length && this.accepted[ackSeqCount] == true) {
+							this.highestSequenceAccepted = this.acks[ackSeqCount].getSequenceNumber();
+						}
+						
+						while (filePacket == null) {
+							filePacket = takeSpecific(this.recvQueue, PacketType.DATA, prevHost, prevPort);
+						}
+					}
+					
+					return this.highestSequenceAccepted - filePacket.getSequenceNumber();
+				} else {
+					this.highestSequenceAccepted = -1;
+					return this.highestSequenceAccepted;
+				}
+				
+				
+			} catch (Exception e) {
+				e.printStackTrace();
+				return -1;
+			}
+		}*/
+	
 		// used by SENDER, FORWARDER, and RECEIVER
-		private int transmitWindow(RingoPacket [] window) {
+		private int transmitWindow(RingoPacket [] window, int lastIndex) {
 			// implement go-back-N with cumulative ACK approach and window-timeout
 			int trials = 0;
 			int highestAck = window[0].getSequenceNumber() - 1;
 			final boolean [] done = new boolean[1];
 			
-			while (highestAck != window[window.length - 1].getSequenceNumber() && trials < 3) {
+			while (highestAck != window[lastIndex].getSequenceNumber() && trials < 3) {
 				Timer windowTimer = new Timer();
-				windowTimer.schedule(new WindowTimerTask("some task", done), 3000L);
+				windowTimer.schedule(new WindowTimerTask("some task", done), 5000L);
 				
-				for (int i = (highestAck + 1 - window[0].getSequenceNumber()); i < window.length; i++) {
+				for (int i = (highestAck + 1 - window[0].getSequenceNumber()); i <= lastIndex; i++) {
 					try {
+						System.out.println("Ringo data packet: " +window[i]);
 						this.sendQueue.put(window[i]);
 					} catch (Exception e) {
 						System.out.println("do something");
@@ -1134,7 +1420,10 @@ public class Ringo implements Runnable {
 				RingoPacket ack = takeSpecific(this.recvQueue, PacketType.DATA_ACK, window[0].getDestIP(), window[0].getDestPort());
 				
 				while (!done[0]) {
-					if (ack.getSequenceNumber() > highestAck) {
+					// System.out.println("highestAck: " +highestAck);
+					if (ack != null && ack.getSequenceNumber() > highestAck) {
+						System.out.println("highest ack: "+highestAck);
+						System.out.println("THIS IS THE ACK YOU'VE BEEN WAITING FOR AHAHAHAHAHAHAH ack " +ack.getSequenceNumber());
 						highestAck = ack.getSequenceNumber();
 					}
 					
@@ -1145,39 +1434,6 @@ public class Ringo implements Runnable {
 			}
 			
 			return highestAck;
-			/*if (highestAck != window[window.length - 1].getSequenceNumber()) {
-				return false;
-			} else {
-				return true;
-			}*/
-		}
-		
-		private RingoPacket createSendPacket(byte [] data, int seqNumber, long seqLength) {
-			// need to define a keep-alive method that returns the next host name and port
-			// RingoPacket toSend = new RingoPacket(this.localName, this.localPort, this.keepAlive.nextHost, this.keepAlive.nextPort, 0, seqNumber, PacketType.DATA, this.role, this.ringSize);
-			ArrayList<String> route = this.route;
-			boolean takeNext = false;
-			String next = "";
-			for (int i = 0; i < route.size(); i++) {
-				if (takeNext) {
-					next = route.get(i);
-				}
-				
-				if (route.get(i) == this.localName + ":" + this.localPort) {
-					takeNext = true;
-				}
-			}
-			
-			RingoPacket toSend;
-			
-			if (data == null) {
-				toSend = new RingoPacket(this.localName, this.localPort, next.substring(0, next.indexOf(":")), Integer.parseInt(next.substring(next.indexOf(":"), next.length())), seqLength, seqNumber, PacketType.DATA, this.role, ringSize);
-			} else {
-				toSend = new RingoPacket(this.localName, this.localPort, next.substring(0, next.indexOf(":")), Integer.parseInt(next.substring(next.indexOf(":"), next.length())), seqLength, seqNumber, PacketType.DATA, this.role, ringSize);
-				toSend.setPayload(data);
-			}
-			
-			return toSend;
 		}
 		
 		private class WindowTimerTask extends TimerTask {

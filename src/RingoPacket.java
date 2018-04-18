@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.Hashtable;
+import java.util.ArrayList;
 
 /**
  * All network communications on the Ringo protocol use
@@ -36,6 +37,8 @@ public class RingoPacket implements java.io.Serializable {
     private long startTime;
     private long stopTime;
     private byte[] payload = new byte[MAX_PAYLOAD_SIZE];
+    private ArrayList<String> route;
+    private String fileName;
     
 	/**
 	 * Serialization is the process of converting a Java object into
@@ -56,6 +59,7 @@ public class RingoPacket implements java.io.Serializable {
 			serializedObj = bo.toByteArray();
 		} catch (IOException e) {
 			// handle later
+			e.printStackTrace();
 		}
 
 		return serializedObj;
@@ -217,6 +221,22 @@ public class RingoPacket implements java.io.Serializable {
 	
     public byte[] getPayload() {
         return payload;
+    }
+    
+    public ArrayList<String> getRoute() {
+    		return this.route;
+    }
+    
+    public void setRoute(ArrayList<String> route) {
+		this.route = route;
+    }
+    
+    public String getFileName() {
+    		return this.fileName;
+    }
+    
+    public void setFileName(String fileName) {
+    		this.fileName = fileName;
     }
     
     public boolean equals(Object other) {
