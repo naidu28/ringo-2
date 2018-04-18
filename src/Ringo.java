@@ -38,6 +38,10 @@ public class Ringo implements Runnable {
 	private LinkedBlockingQueue<RingoPacket> recvQueue;
 	private LinkedBlockingQueue<RingoPacket> sendQueue;
 	private LinkedBlockingQueue<RingoPacket> keepAliveQueue;
+	private RingTracker tracker;
+	private RingoPacketFactory factory;
+	private KeepAlive keepalive;
+	private Thread keepAliveThread;
 
 	/**
 	 * The constructor accepts all of the command-line arguments specified in the
@@ -78,8 +82,8 @@ public class Ringo implements Runnable {
 		}
 		this.recvQueue = new LinkedBlockingQueue<RingoPacket>();
 		this.sendQueue = new LinkedBlockingQueue<RingoPacket>();
-
 		this.keepAliveQueue = new LinkedBlockingQueue<RingoPacket>();
+		this.factory = new RingoPacketFactory(localName, localPort, role, ringSize);
 	}
 
 	/**
@@ -164,6 +168,13 @@ public class Ringo implements Runnable {
 		System.out.println("RTT Matrix convergence complete!");
 		System.out.println("Network is ready to use.\n");
 		Scanner scanner = new Scanner(System.in);
+		
+		// (String me, long[][] rtt, Hashtable<Integer, String> indexRTT)
+		
+		tracker = new RingTracker(this.localName + ":" + this.localPort, rtt, indexRtt);
+		keepalive = new KeepAlive(keepAliveQueue, sendQueue, factory, tracker);
+		keepAliveThread = new Thread(keepalive);
+		keepAliveThread.start();
 
 		while (true) {
 			System.out.println("Enter any of the following commands: show-matrix, show-ring, disconnect");
