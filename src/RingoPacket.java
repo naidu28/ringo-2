@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.Hashtable;
+import java.util.ArrayList;
 
 /**
  * All network communications on the Ringo protocol use
@@ -25,7 +26,7 @@ public class RingoPacket implements java.io.Serializable {
     private int sourcePort;
     private String destIP;
     private int destPort;
-    private int packetLength;
+    private long sequenceLength;
     private int sequenceNumber;
     private PacketType type;
     private Role role;
@@ -36,8 +37,9 @@ public class RingoPacket implements java.io.Serializable {
     private long startTime;
     private long stopTime;
     private byte[] payload = new byte[MAX_PAYLOAD_SIZE];
-
-	private boolean initskip;
+    private ArrayList<String> route;
+    private String fileName;
+	  private boolean initskip;
     
 	/**
 	 * Serialization is the process of converting a Java object into
@@ -58,6 +60,7 @@ public class RingoPacket implements java.io.Serializable {
 			serializedObj = bo.toByteArray();
 		} catch (IOException e) {
 			// handle later
+			e.printStackTrace();
 		}
 
 		return serializedObj;
@@ -96,13 +99,13 @@ public class RingoPacket implements java.io.Serializable {
      * packet, but not any meta-information
      * @param basepacket Raw UDP Packet with valid payload
      */
-    public RingoPacket(String sourceIP, int sourcePort, String destIP, int destPort, int packetLength, int seqNum, PacketType type, Role role, int ringSize) {
+    public RingoPacket(String sourceIP, int sourcePort, String destIP, int destPort, long seqLength, int seqNum, PacketType type, Role role, int ringSize) {
         // TODO:
     		this.sourceIP = sourceIP;
     		this.sourcePort = sourcePort;
     		this.destIP = destIP;
     		this.destPort = destPort;
-    		this.packetLength = packetLength;
+    		this.sequenceLength = seqLength;
     		this.sequenceNumber = seqNum;
     		this.type = type;
     		this.role = role;
@@ -132,9 +135,25 @@ public class RingoPacket implements java.io.Serializable {
     public int getDestPort() {
         return destPort;
     }
+    
+    public void setSourceIP(String ip) {
+        this.sourceIP = ip;
+    }
 
-    public int getPacketLength() {
-        return packetLength;
+    public void setSourcePort(int port) {
+        this.sourcePort = port;
+    }
+
+    public void setDestIP(String ip) {
+        this.destIP = ip;
+    }
+
+    public void setDestPort(int port) {
+        this.destPort = port;
+    }
+
+    public long getSequenceLength() {
+        return sequenceLength;
     }
 
     public int getSequenceNumber() {
@@ -197,8 +216,28 @@ public class RingoPacket implements java.io.Serializable {
 		return this.stopTime;
 	}
 
+	public void setPayload(byte [] payload) {
+		this.payload = payload;
+	}
+	
     public byte[] getPayload() {
         return payload;
+    }
+    
+    public ArrayList<String> getRoute() {
+    		return this.route;
+    }
+    
+    public void setRoute(ArrayList<String> route) {
+		this.route = route;
+    }
+    
+    public String getFileName() {
+    		return this.fileName;
+    }
+    
+    public void setFileName(String fileName) {
+    		this.fileName = fileName;
     }
     
     public boolean equals(Object other) {
@@ -215,7 +254,7 @@ public class RingoPacket implements java.io.Serializable {
     		this.sourcePort = packet.getSourcePort();
     		this.destIP = packet.getDestIP();
     		this.destPort = packet.getDestPort();
-    		this.packetLength = packet.getPacketLength();
+    		this.sequenceLength = packet.getSequenceLength();
     		this.sequenceNumber = packet.getSequenceNumber();
     		this.type = packet.getType();
     		this.role = packet.getRole();
