@@ -125,7 +125,7 @@ public class Ringo implements Runnable {
 		netIn.start();
 		netOut.start();
 		
-		if (this.pocName != null) {
+		if (this.pocName != "0" && this.pocPort != 0) {
 			RingoPacket responseIn = null;
 			RingoPacket packet = new RingoPacket(this.localName, this.localPort, this.pocName, this.pocPort, 0, 0, PacketType.PING_REQ, this.role, this.ringSize);
 			sendQueue.add(packet);
@@ -157,7 +157,14 @@ public class Ringo implements Runnable {
 			System.out.println("\nAsking for Initialization state from PoC");
 			skip = checkInit();
 			flushType(recvQueue, PacketType.INIT_RES);
-			flushType(sendQueue, PacketType.INIT_RES);
+			flushType(sendQueue, PacketType.INIT_REQ);
+			System.out.println("recvqueue: " +this.recvQueue);
+			System.out.println("sendqueue: " +this.sendQueue);
+			/*try {
+				Thread.sleep(500);
+			} catch (Exception e) {
+				
+			}*/
 		}
 		
 		if (!skip) {
@@ -319,16 +326,9 @@ public class Ringo implements Runnable {
 					// Drop Packet
 				}
 			}
-			
-			try {
-				Thread.sleep(200);
-			} catch (Exception e) {
-				
-			}
 			// if not, drop the packet
 		}
-		flushType(recvQueue, PacketType.INIT_REQ);
-		flushType(sendQueue, PacketType.INIT_RES);
+		
 		return skip;
 	}
 
@@ -367,6 +367,8 @@ public class Ringo implements Runnable {
 		// System.out.println("ay");
 		
 		if (this.pocName != null) {
+			System.out.println("recvqueue from spot 2: " +this.recvQueue);
+			System.out.println("sendqueue from spot 2: " +this.sendQueue);
 			this.lsa.put(this.pocName+":"+this.pocPort, 1);
 			converged.put(this.pocName+":"+this.pocPort, false);
 
@@ -381,6 +383,10 @@ public class Ringo implements Runnable {
 			// System.out.println("sendqueue: " +this.sendQueue);
 			// listen for responses from all nodes
 			// and respond with corresponding LSA vectors
+			System.out.println("lsa: " + this.lsa);
+			System.out.println("converged: " +converged);
+			System.out.println("recvqueue from spot 3: " +this.recvQueue);
+			System.out.println("sendqueue from spot 3: " +this.sendQueue);
 			if (!converged.get(this.localName+":"+this.localPort)) {
 				try {
 					RingoPacket request = recvQueue.take();
@@ -1079,8 +1085,12 @@ public class Ringo implements Runnable {
 			try {
 				RingoPacket packet = RingoPacket.deserialize(data);
 				packet.setStopTime(System.currentTimeMillis());
-				if (packet != null) {
+				
+				if (packet.getType() != PacketType.INIT_RES) {
 					replaceDuplicates(packet);
+				}
+				
+				if (packet != null) {
 					if (packet.getType() == PacketType.PING_REQ) {
 						RingoPacket responseOut = new RingoPacket(Ringo.this.localName, Ringo.this.localPort, packet.getSourceIP(), packet.getSourcePort(), 0, 0, PacketType.PING_RES, Ringo.this.role, Ringo.this.ringSize);
 						responseOut.setStartTime(packet.getStartTime()); // to generate RTT we have to use other packet's start time
@@ -1169,7 +1179,7 @@ public class Ringo implements Runnable {
 				if (packet != null) {
 					// System.out.println("current time start: " +System.currentTimeMillis());
 					if (packet.getType() == PacketType.DATA || packet.getType() == PacketType.DATA_ACK) {
-						// System.out.println("Sent DATA packet sequence number: " +packet.getSequenceNumber());
+						System.out.println("Sent DATA packet sequence number: " +packet.getSequenceNumber());
 					} else {
 						// replaceDuplicates(packet);
 					}
@@ -1305,6 +1315,7 @@ public class Ringo implements Runnable {
 				FileInputStream fileReader;
 				fileReader = new FileInputStream(file);
 				this.route = tracker.getRoute();
+				System.out.println("the new route: " +this.route);
 				
 				int seqNumber = 0;
 				byte [] data = new byte[10000];
@@ -1374,7 +1385,7 @@ public class Ringo implements Runnable {
 			// need to define a keep-alive method that returns the next host name and port
 			// RingoPacket toSend = new RingoPacket(this.localName, this.localPort, this.keepAlive.nextHost, this.keepAlive.nextPort, 0, seqNumber, PacketType.DATA, this.role, this.ringSize);
 			String next = getNextRingo();
-			
+			System.out.println("next node: " +next);
 			RingoPacket toSend;
 			
 			if (data == null) {
@@ -1411,7 +1422,7 @@ public class Ringo implements Runnable {
 				filePacket = takeSpecific(this.recvQueue, PacketType.DATA, lastRingo.substring(0, lastRingo.indexOf(":")), Integer.parseInt(lastRingo.substring(lastRingo.indexOf(":") + 1)));
 			}
 			
-			if (filePacket != null && !this.fileName.equals(filePacket.getFileName())) {
+			if (filePacket != null) {
 				String hostName = filePacket.getSourceIP();
 				int hostPort = filePacket.getSourcePort();
 				int ackNum = filePacket.getSequenceNumber();
@@ -1498,7 +1509,7 @@ public class Ringo implements Runnable {
 				
 				System.out.println("finished receiving file");
 				
-				if (this.role == Role.RECEIVER) {
+				if (this.role == Role.RECEIVER && !this.fileName.equals(filePacket.getFileName())) {
 					writeFile(fileName);
 					this.fileName = fileName;
 				}
@@ -1524,13 +1535,24 @@ public class Ringo implements Runnable {
 						// check for churn
 						if (!tracker.isOnline(this.window[0].getDestIP()+":"+this.window[0].getDestPort())) {
 							System.out.println("next node is churning");
+							ArrayList<String> replacementRoute = new ArrayList<String>();
+							
+							for (int i = this.route.size() - 1; i >= 0; i++) {
+								if (this.route.get(i).equals(this.window[0].getDestIP()+":"+this.window[0].getDestPort())) {
+									replacementRoute.add(this.route.get(i));
+								}
+							}
+							
+							this.route = replacementRoute;
+							
 							for (int i = 0; i < this.file.length; i++) {
-								String destRingo = getPrevRingo();
+								String destRingo = getNextRingo();
 								filePacket = this.file[i];
 								filePacket.setSourceIP(this.localName);
 								filePacket.setSourcePort(this.localPort);
 								filePacket.setDestIP(destRingo.substring(0, destRingo.indexOf(":")));
 								filePacket.setDestPort(Integer.parseInt(destRingo.substring(destRingo.indexOf(":") + 1)));
+								filePacket.setRoute(replacementRoute);
 								this.window[i] = filePacket;
 							}
 						}
