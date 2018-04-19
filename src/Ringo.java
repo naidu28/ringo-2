@@ -199,6 +199,8 @@ public class Ringo implements Runnable {
 		  	e.printStackTrace();
 		  }*/
 		}
+		
+		initialized = true;
 
 		System.out.println("RTT Matrix convergence complete!");
 		System.out.println("Network is ready to use.\n");
@@ -307,8 +309,13 @@ public class Ringo implements Runnable {
 					this.rttIndex = res.getRttIndex();
 					this.indexRtt = res.getIndexRtt();
 				}
+			} else {
+				try {
+					recvQueue.put(res);
+				} catch (InterruptedException e) {
+					// Drop Packet
+				}
 			}
-			// if not, drop the packet
 		}
 		flushType(recvQueue, PacketType.INIT_REQ);
 		flushType(sendQueue, PacketType.INIT_RES);
