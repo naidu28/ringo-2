@@ -4,13 +4,13 @@ sample input:
   * [snaidu6@networklab4 ringo]$ java -jar ringo.jar F 4444 networklab5.cc.gatech.edu 5555 4
   * [snaidu6@networklab5 ringo]$ java -jar ringo.jar R 5555 networklab2.cc.gatech.edu 2222 4
 
-sample output: 
+sample output:
 > "show-matrix"
 
-             .107.14:3333 .107.16:5555 .107.15:4444 .107.13:2222 
-.107.14:3333            0           52           50          403 
-.107.16:5555           52            0          201          201 
-.107.15:4444           47          297            0           49 
+             .107.14:3333 .107.16:5555 .107.15:4444 .107.13:2222
+.107.14:3333            0           52           50          403
+.107.16:5555           52            0          201          201
+.107.15:4444           47          297            0           49
 .107.13:2222           99          102           51            0
 
 > "show-ring"
@@ -18,7 +18,7 @@ sample output:
 130.207.107.14:3333 -> 130.207.107.15:4444 -> 130.207.107.13:2222 -> 130.207.107.16:5555
 
 > "offline 20"
-> (on other ringo) "show-ring"
+> (type on other ringo) "show-ring"
 
 130.207.107.14:3333 -> 130.207.107.16:5555 -> 130.207.107.15:4444
 
@@ -29,8 +29,7 @@ sample output:
 > "send example.txt"
 
 sender: (example.txt)
-Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.
-
+Sent the whole file.
 
 receiver: (example-received.txt)
-Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.
+Received file: example-received.txt

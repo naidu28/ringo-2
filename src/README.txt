@@ -18,3 +18,8 @@ Bugs/Limitations:
   * Occasionally (< 5% of the time) is prone to hang if all nodes are started out of Point-of-Contact order
       - In these cases it may take up to 1 minute per phase (e.g. "Starting peer discovery...", "Starting RTT Vector creation...", "Starting RTT Matrix convergence...")
       - If taking longer than that, restart all N nodes (extremely rare occurrence)
+  * File with a specific filename (example: "test.txt") can only be sent once on network successfully
+      - If you would like to repeat a file transmission, put RECEIVER node into churn (disconnect) and delete the received file
+      - If the above doesn't work, restart the entire network
+  * When a file is received, it is saved as [original filename] + "received." + [extension]
+      - This was a specific design decision to allow for easily identifying original file and received file if located within the same directory

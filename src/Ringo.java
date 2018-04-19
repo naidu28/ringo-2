@@ -405,7 +405,7 @@ public class Ringo implements Runnable {
 						System.out.println(e);
 					}
 
-					System.out.println(this.lsa);
+					// System.out.println(this.lsa);
 					Iterator iter = this.lsa.keySet().iterator();
 
 					while (iter.hasNext()) {
@@ -436,7 +436,7 @@ public class Ringo implements Runnable {
 						System.out.println(e);
 					}
 
-					System.out.println(converged);
+					// System.out.println(converged);
 
 					Iterator iter = this.lsa.keySet().iterator();
 
@@ -1374,7 +1374,7 @@ public class Ringo implements Runnable {
 					while (highestAcked < seqLength.intValue() - 1) {
 						// if churn occuring
 						if (!tracker.isOnline(this.window[0].getDestIP()+":"+this.window[0].getDestPort())) {
-							System.out.println("Next node is experiencing churn. Reversing.");
+							// System.out.println("Next node is experiencing churn. Reversing.");
 							ArrayList<String> replacementRoute = new ArrayList<String>();
 
 							for (int i = this.route.size() - 1; i >= 0; i--) {
@@ -1537,7 +1537,7 @@ public class Ringo implements Runnable {
 					while (highestAck < this.window.length - 1) {
 						// check for churn
 						if (!tracker.isOnline(this.window[0].getDestIP()+":"+this.window[0].getDestPort())) {
-							System.out.println("Next node is experiencing churn. Reversing.");
+							// System.out.println("Next node is experiencing churn. Reversing.");
 							ArrayList<String> replacementRoute = new ArrayList<String>();
 
 							for (int i = this.route.size() - 1; i >= 0; i--) {
@@ -1590,6 +1590,10 @@ public class Ringo implements Runnable {
 					writeFile.createNewFile();
 				}
 
+				for (int i = 0; i < this.file.length; i++) {
+					fop.write(this.file[i].getPayload());
+				}
+				
 				fop.flush();
 				fop.close();
 
