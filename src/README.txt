@@ -7,6 +7,16 @@ Files:
   * RingoPacket.java - packet class for all network communication
   * Role.java - enum describing role of node
   * PacketType.java - enum describing type of packet
+  * ArgumentChecker.java - Small helper class that checks and parses arguments
+  * HostInformation.java - Information Holder class that holds the state of a Ringo
+  * HostState.java - Enum that describes the uptime status of a Ringo
+  * KeepAlive.java - Class that responds to KeepAlive requests,
+                     and has a schedulable update method that notifies the RingTracker
+                     of each Ringo's uptime state
+  * KeepAliveTimerTask.java - Class that runs every 4 seconds, calling KeepAlive's update method
+  * Pair.java - Simple information holding class that keeps two coupled objects together
+  * RingoPacketFactory.java - Simple helper class that create packets that originate from *this* Ringo
+  * RingTracker.java - Class that keeps and maintains the Ring structure for the Ringo.
 
 Instructions:
   * Have Java 8 installed on your machine
