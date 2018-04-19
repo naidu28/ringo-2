@@ -156,15 +156,6 @@ public class Ringo implements Runnable {
 		if (this.pocName != null) {
 			System.out.println("\nAsking for Initialization state from PoC");
 			skip = checkInit();
-			flushType(recvQueue, PacketType.INIT_RES);
-			flushType(sendQueue, PacketType.INIT_REQ);
-			System.out.println("recvqueue: " +this.recvQueue);
-			System.out.println("sendqueue: " +this.sendQueue);
-			/*try {
-				Thread.sleep(500);
-			} catch (Exception e) {
-				
-			}*/
 		}
 		
 		if (!skip) {
@@ -327,6 +318,8 @@ public class Ringo implements Runnable {
 				}
 			}
 			// if not, drop the packet
+			flushType(recvQueue, PacketType.INIT_RES);
+			flushType(sendQueue, PacketType.INIT_REQ);
 		}
 		
 		return skip;
@@ -1086,9 +1079,9 @@ public class Ringo implements Runnable {
 				RingoPacket packet = RingoPacket.deserialize(data);
 				packet.setStopTime(System.currentTimeMillis());
 				
-				if (packet.getType() != PacketType.INIT_RES) {
+				//if (packet.getType() != PacketType.INIT_RES) {
 					replaceDuplicates(packet);
-				}
+				//}
 				
 				if (packet != null) {
 					if (packet.getType() == PacketType.PING_REQ) {
