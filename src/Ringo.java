@@ -125,7 +125,7 @@ public class Ringo implements Runnable {
 		netIn.start();
 		netOut.start();
 		
-		if (this.pocName != "0" && this.pocPort != 0) {
+		if (this.pocName != null) {
 			RingoPacket responseIn = null;
 			RingoPacket packet = new RingoPacket(this.localName, this.localPort, this.pocName, this.pocPort, 0, 0, PacketType.PING_REQ, this.role, this.ringSize);
 			sendQueue.add(packet);
@@ -156,6 +156,8 @@ public class Ringo implements Runnable {
 		if (this.pocName != null) {
 			System.out.println("\nAsking for Initialization state from PoC");
 			skip = checkInit();
+			flushType(recvQueue, PacketType.INIT_RES);
+			flushType(sendQueue, PacketType.INIT_RES);
 		}
 		
 		if (!skip) {
@@ -212,12 +214,12 @@ public class Ringo implements Runnable {
 		keepAliveThread.start();
 
 		this.ringRoute = generateOptimalRing();
-		executionLoop(netIn, netOut);
+		executionLoop(netIn, netOut, tracker, keepalive);
 		// System.out.println(this.lsa);
 	}
 	
-	private void executionLoop(Thread netIn, Thread netOut) {
-		WorkerThread workerObject = new WorkerThread(this.role, this.sendQueue, this.recvQueue, this.ringRoute, this.localName, this.localPort, this.sendFileList, this.outputQueue);
+	private void executionLoop(Thread netIn, Thread netOut, RingTracker tracker, KeepAlive keepalive) {
+		WorkerThread workerObject = new WorkerThread(this.role, this.sendQueue, this.recvQueue, this.ringRoute, this.localName, this.localPort, this.sendFileList, this.outputQueue, tracker);
 		Thread worker = new Thread(workerObject);
 		worker.start();
 		
@@ -290,6 +292,7 @@ public class Ringo implements Runnable {
 		boolean done = false;
 		while (!done) {
 			RingoPacket req = factory.makePacket(pocName, pocPort, 0, 0, PacketType.INIT_REQ);
+			System.out.println("init request packet: " +req);
 			RingoPacket res = null;
 			try {
 				sendQueue.put(req);
@@ -307,6 +310,12 @@ public class Ringo implements Runnable {
 					this.rttIndex = res.getRttIndex();
 					this.indexRtt = res.getIndexRtt();
 				}
+			}
+			
+			try {
+				Thread.sleep(300);
+			} catch (Exception e) {
+				
 			}
 			// if not, drop the packet
 		}
@@ -347,7 +356,9 @@ public class Ringo implements Runnable {
 			converged.put(this.localName+":"+this.localPort, true);
 		}
 		
-		if (this.pocName != "0" && this.pocPort != 0) {
+		// System.out.println("ay");
+		
+		if (this.pocName != null) {
 			this.lsa.put(this.pocName+":"+this.pocPort, 1);
 			converged.put(this.pocName+":"+this.pocPort, false);
 
@@ -356,6 +367,7 @@ public class Ringo implements Runnable {
 			sendQueue.add(packet);
 		}
 
+		// System.out.println("bee");
 		while (!isLsaConverged(converged)) {
 			// System.out.println("recvqueue: " +this.recvQueue);
 			// System.out.println("sendqueue: " +this.sendQueue);
@@ -1222,7 +1234,8 @@ public class Ringo implements Runnable {
 		private int localPort;
 		private RingoPacket [] window;
 		private RingoPacket [] file;
-		String fileName;
+		private String fileName;
+		private RingTracker tracker;
 		
 		
 		private boolean [] accepted;
@@ -1231,7 +1244,7 @@ public class Ringo implements Runnable {
 		private LinkedBlockingQueue<String> sendFileList;
 		private LinkedBlockingQueue<String> outputQueue;
 		
-		public WorkerThread(Role role, LinkedBlockingQueue<RingoPacket> sendQueue, LinkedBlockingQueue<RingoPacket> recvQueue, ArrayList<String> route, String localName, int localPort, LinkedBlockingQueue<String> sendFileList, LinkedBlockingQueue<String> outputQueue) {
+		public WorkerThread(Role role, LinkedBlockingQueue<RingoPacket> sendQueue, LinkedBlockingQueue<RingoPacket> recvQueue, ArrayList<String> route, String localName, int localPort, LinkedBlockingQueue<String> sendFileList, LinkedBlockingQueue<String> outputQueue, RingTracker tracker) {
 			this.role = role;
 			this.sendQueue = sendQueue;
 			this.recvQueue = recvQueue;
@@ -1244,6 +1257,7 @@ public class Ringo implements Runnable {
 			this.sendFileList = sendFileList;
 			this.outputQueue = outputQueue;
 			this.fileName = "";
+			this.tracker = tracker;
 		}
 		
 		public void run() {
@@ -1282,6 +1296,7 @@ public class Ringo implements Runnable {
 			try {
 				FileInputStream fileReader;
 				fileReader = new FileInputStream(file);
+				this.route = tracker.getRoute();
 				
 				int seqNumber = 0;
 				byte [] data = new byte[10000];
@@ -1322,6 +1337,18 @@ public class Ringo implements Runnable {
 					int highestAcked = transmitWindow(this.window, seqLength.intValue());
 					while (highestAcked < seqLength.intValue() - 1) {
 						// if churn not occurring
+						if (!tracker.isOnline(this.window[0].getDestIP()+":"+this.window[0].getDestPort())) {
+							System.out.println("next node is churning");
+							for (int i = 0; i < this.window.length; i++) {
+								String destRingo = getPrevRingo();
+								RingoPacket filePacket = this.window[i];
+								filePacket.setSourceIP(this.localName);
+								filePacket.setSourcePort(this.localPort);
+								filePacket.setDestIP(destRingo.substring(0, destRingo.indexOf(":")));
+								filePacket.setDestPort(Integer.parseInt(destRingo.substring(destRingo.indexOf(":") + 1)));
+							}
+						}
+						
 						System.out.println("one possible outcome");
 						highestAcked = transmitWindow(this.window, seqLength.intValue());
 					}
@@ -1487,6 +1514,18 @@ public class Ringo implements Runnable {
 					int highestAck = transmitWindow(this.window, this.window.length - 1);
 					while (highestAck < this.window.length - 1) {
 						// check for churn
+						if (!tracker.isOnline(this.window[0].getDestIP()+":"+this.window[0].getDestPort())) {
+							System.out.println("next node is churning");
+							for (int i = 0; i < this.file.length; i++) {
+								String destRingo = getPrevRingo();
+								filePacket = this.file[i];
+								filePacket.setSourceIP(this.localName);
+								filePacket.setSourcePort(this.localPort);
+								filePacket.setDestIP(destRingo.substring(0, destRingo.indexOf(":")));
+								filePacket.setDestPort(Integer.parseInt(destRingo.substring(destRingo.indexOf(":") + 1)));
+								this.window[i] = filePacket;
+							}
+						}
 						// else try again
 						System.out.println("not receiving all acks during forwarding");
 						highestAck = transmitWindow(this.window, this.window.length - 1);
