@@ -85,6 +85,10 @@ public class App {
 		n = intchecker.check(args[4], "Given N isn't valid", (Integer i) -> i > 0);
 	}
 
+	/**
+	 * Print instructions on how to start this program
+	 * @param stream Where to send the help statements
+	 */
 	private static void printHelp(PrintStream stream) {
 		stream.println("Runtime Arguments:");
 		stream.println("java Ringo <Role> <Local Port> <PoC Hostname> <PoC Port> <N>");
