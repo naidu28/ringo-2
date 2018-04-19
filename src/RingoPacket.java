@@ -39,7 +39,8 @@ public class RingoPacket implements java.io.Serializable {
     private byte[] payload = new byte[MAX_PAYLOAD_SIZE];
     private ArrayList<String> route;
     private String fileName;
-	  private boolean initskip;
+	private boolean initskip;
+	private boolean received;
     
 	/**
 	 * Serialization is the process of converting a Java object into
@@ -238,6 +239,14 @@ public class RingoPacket implements java.io.Serializable {
     
     public void setFileName(String fileName) {
     		this.fileName = fileName;
+    }
+    
+    public void setReceived(boolean isReceived) {
+    		this.received = isReceived;
+    }
+    
+    public boolean getReceived() {
+    		return this.received;
     }
     
     public boolean equals(Object other) {

@@ -1178,7 +1178,7 @@ public class Ringo implements Runnable {
 				if (packet != null) {
 					// System.out.println("current time start: " +System.currentTimeMillis());
 					if (packet.getType() == PacketType.DATA || packet.getType() == PacketType.DATA_ACK) {
-						System.out.println("Sent DATA packet sequence number: " +packet.getSequenceNumber());
+						// System.out.println("Sent DATA packet sequence number: " +packet.getSequenceNumber());
 					} else {
 						// replaceDuplicates(packet);
 					}
@@ -1422,6 +1422,12 @@ public class Ringo implements Runnable {
 			}
 			
 			if (filePacket != null) {
+				if (this.role == Role.SENDER && filePacket.getReceived()) {
+					System.out.println("Ring traversed");
+					flushType(this.recvQueue, PacketType.DATA);
+					return;
+				}
+				
 				String hostName = filePacket.getSourceIP();
 				int hostPort = filePacket.getSourcePort();
 				int ackNum = filePacket.getSequenceNumber();
@@ -1475,11 +1481,11 @@ public class Ringo implements Runnable {
 					
 					// update ack
 					ackNum = getAckNum(accepted);
-					if (ackNum == 35) {
+					/*if (ackNum == 35) {
 						System.out.println("34: " +accepted[34]);
 						System.out.println("35: " +accepted[35]);
 						System.out.println("36: " +accepted[36]);
-					}
+					}*/
 					// flushData(this.recvQueue, hostName, hostPort, ackNum);
 					
 					// get the next data packet in the sequence
@@ -1496,8 +1502,8 @@ public class Ringo implements Runnable {
 						}
 					}
 					
-					System.out.println("ackNum: " +ackNum);
-					System.out.println("seqLength: " +seqLength);
+					// System.out.println("ackNum: " +ackNum);
+					// System.out.println("seqLength: " +seqLength);
 				}
 				
 				flushType(this.recvQueue, PacketType.DATA);
@@ -1506,7 +1512,7 @@ public class Ringo implements Runnable {
 					this.file[filePacket.getSequenceNumber()] = filePacket;
 				}*/
 				
-				System.out.println("finished receiving file");
+				// System.out.println("finished receiving file");
 				
 				if (this.role == Role.RECEIVER && !this.fileName.equals(filePacket.getFileName())) {
 					writeFile(fileName);
@@ -1526,6 +1532,7 @@ public class Ringo implements Runnable {
 						filePacket.setSourcePort(this.localPort);
 						filePacket.setDestIP(destRingo.substring(0, destRingo.indexOf(":")));
 						filePacket.setDestPort(Integer.parseInt(destRingo.substring(destRingo.indexOf(":") + 1)));
+						filePacket.setReceived(true);
 						this.window[i] = filePacket;
 					}
 					
@@ -1533,11 +1540,11 @@ public class Ringo implements Runnable {
 					while (highestAck < this.window.length - 1) {
 						// check for churn
 						if (!tracker.isOnline(this.window[0].getDestIP()+":"+this.window[0].getDestPort())) {
-							System.out.println("next node is churning");
+							System.out.println("Next node is experiencing churn. Reversing.");
 							ArrayList<String> replacementRoute = new ArrayList<String>();
 							
-							for (int i = this.route.size() - 1; i >= 0; i++) {
-								if (this.route.get(i).equals(this.window[0].getDestIP()+":"+this.window[0].getDestPort())) {
+							for (int i = this.route.size() - 1; i >= 0; i--) {
+								if (!this.route.get(i).equals(this.window[0].getDestIP()+":"+this.window[0].getDestPort())) {
 									replacementRoute.add(this.route.get(i));
 								}
 							}
@@ -1547,8 +1554,6 @@ public class Ringo implements Runnable {
 							for (int i = 0; i < this.file.length; i++) {
 								String destRingo = getNextRingo();
 								filePacket = this.file[i];
-								filePacket.setSourceIP(this.localName);
-								filePacket.setSourcePort(this.localPort);
 								filePacket.setDestIP(destRingo.substring(0, destRingo.indexOf(":")));
 								filePacket.setDestPort(Integer.parseInt(destRingo.substring(destRingo.indexOf(":") + 1)));
 								filePacket.setRoute(replacementRoute);
@@ -1556,7 +1561,7 @@ public class Ringo implements Runnable {
 							}
 						}
 						// else try again
-						System.out.println("not receiving all acks during forwarding");
+						// System.out.println("ot receiving all acks during forwarding");
 						highestAck = transmitWindow(this.window, this.window.length - 1);
 					}
 					
