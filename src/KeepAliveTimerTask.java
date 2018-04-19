@@ -5,6 +5,11 @@ import java.util.Set;
 import java.util.TimerTask;
 import java.util.concurrent.LinkedBlockingQueue;
 
+/**
+ * Class that calls update in KeepAlive, and sends KeepAlive packets to every Ringo it knows (even down ones!)
+ * @author andrewray
+ *
+ */
 public class KeepAliveTimerTask extends TimerTask {
 	public  static final int TIMEOUT_REPEATS = 2;
 	
@@ -31,6 +36,11 @@ public class KeepAliveTimerTask extends TimerTask {
 		keepAlive.update();
 	}
 	
+	/**
+	 * Creates a KEEPALIVE request packet that will be sent to to the Ringo
+	 * @param info Ringo to send the KeepAlive packet to
+	 * @return KeepAlive packet
+	 */
 	private RingoPacket createReq(HostInformation info) {
 		return factory.makePacket(info.getHost(), info.getPort(), 0, 0, PacketType.KEEPALIVE);
 	}

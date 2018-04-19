@@ -120,7 +120,7 @@ public class Ringo implements Runnable {
 		LinkedBlockingQueue<RingoPacket> keepAliveQueue = this.keepAliveQueue;
 		
 
-		Thread netIn = new Thread(new ReceiverThread(recvQueue, keepAliveQueue, sendQueue));
+		Thread netIn = new Thread(new ReceiverThread(recvQueue, keepAliveQueue));
 		Thread netOut = new Thread(new SenderThread(sendQueue));
 		netIn.start();
 		netOut.start();
@@ -223,6 +223,13 @@ public class Ringo implements Runnable {
 		// System.out.println(this.lsa);
 	}
 	
+	/**
+	 * Takes user input and schedules the commands' execution
+	 * @param netIn Thread accepting packets from socket
+	 * @param netOut Thread sending packets via the socket
+	 * @param tracker Tracker that maintains Ring information
+	 * @param keepalive KeepAive object that keeps track of KeepAlive state
+	 */
 	private void executionLoop(Thread netIn, Thread netOut, RingTracker tracker, KeepAlive keepalive) {
 		WorkerThread workerObject = new WorkerThread(this.role, this.sendQueue, this.recvQueue, this.ringRoute, this.localName, this.localPort, this.sendFileList, this.outputQueue, tracker);
 		Thread worker = new Thread(workerObject);
@@ -292,6 +299,12 @@ public class Ringo implements Runnable {
 		}
 	}
 
+	/**
+	 * Runs an initial check to see if the PoC has already been initialized.
+	 * If it has, then take the RTT, LSA, RTTINDEX, and INDEXRTT structures from 
+	 * the PoC and use it as its own.
+	 * @return true if it's OK to skip the rest of the bootstrap process
+	 */
 	private boolean checkInit() {
 		boolean skip = false;
 		boolean done = false;
@@ -827,6 +840,13 @@ public class Ringo implements Runnable {
 		}
 	}
 	
+	/**
+	 * Remove all packets of a specific type, and from a specific Ringo
+	 * @param queue Queue to search
+	 * @param type Type of packet to remove
+	 * @param hostname Hostname of Ringo
+	 * @param port Port of Ringo
+	 */
 	private void flushSpecific(LinkedBlockingQueue<RingoPacket> queue, PacketType type, String hostname, int port) {
 
 		Iterator iter = queue.iterator();
@@ -834,17 +854,6 @@ public class Ringo implements Runnable {
 		while (iter.hasNext()) {
 			RingoPacket packet = (RingoPacket) iter.next();
 			if (packet.getType() == type && packet.getSourceIP().equals(hostname) && packet.getSourcePort() == port) {
-				iter.remove();
-			}
-		}
-	}
-	
-	private void flushData(LinkedBlockingQueue<RingoPacket> queue, String hostname, int port, int seqNumber) {
-		Iterator iter = queue.iterator();
-
-		while (iter.hasNext()) {
-			RingoPacket packet = (RingoPacket) iter.next();
-			if (packet.getType() == PacketType.DATA && packet.getSourceIP().equals(hostname) && packet.getSourcePort() == port && packet.getSequenceNumber() < seqNumber) {
 				iter.remove();
 			}
 		}
@@ -1049,14 +1058,11 @@ public class Ringo implements Runnable {
 	private class ReceiverThread implements Runnable {
 		LinkedBlockingQueue<RingoPacket> packetQueue;
 		LinkedBlockingQueue<RingoPacket> keepAliveQueue;
-		LinkedBlockingQueue<RingoPacket> outQueue;
 
 		private ReceiverThread(LinkedBlockingQueue<RingoPacket> dataQueue, 
-				LinkedBlockingQueue<RingoPacket> keepAliveQueue,
-				LinkedBlockingQueue<RingoPacket> outQueue) {
+				LinkedBlockingQueue<RingoPacket> keepAliveQueue) {
 			this.packetQueue = dataQueue;
 			this.keepAliveQueue = keepAliveQueue;
-			this.outQueue = outQueue;
 		}
 
 		public void run() {
@@ -1073,6 +1079,11 @@ public class Ringo implements Runnable {
 			}
 		}
 
+		/**
+		 * Fetch raw data, and convert to a DatagramPacket.
+		 * @return DataGram packet fetched from the queue
+		 * @throws IOException called when you cannot read from socket.
+		 */
 		private DatagramPacket receive() throws IOException {
 			byte[] data = new byte[20000];
 			DatagramPacket packet = new DatagramPacket(data, data.length);
@@ -1080,6 +1091,17 @@ public class Ringo implements Runnable {
 			return packet;
 		}
 
+		/**
+		 * Converts DataGram packet to RingoPacket, and 
+		 * enqueues it accordingly. 
+		 * 
+		 * If the packet has something to do with respect to bootstrapping, 
+		 * then this will put the RTT, and LSA data structures directly into the Ringo.
+		 * 
+		 * If the packet pertains to KeepAlive, the packet is enqueued into the KeepAlive queue.
+		 * Otherwise, it is placed into the normal receiveQueue
+		 * @param data raw Data from Socket
+		 */
 		private void deserializeAndEnqueue(byte [] data) {
 			try {
 				RingoPacket packet = RingoPacket.deserialize(data);
@@ -1135,6 +1157,10 @@ public class Ringo implements Runnable {
 			}
 		}
 
+		/**
+		 * Remove all packets that are equal to the parameter packet
+		 * @param packet Packet to compare against
+		 */
 		private void replaceDuplicates(RingoPacket packet) {
 			Iterator iter = this.packetQueue.iterator();
 
@@ -1201,6 +1227,12 @@ public class Ringo implements Runnable {
 			}
 		}
 
+		/**
+		 * Convert the RingoPacket into something Java can put into the socket
+		 * @param data Payload of the packet
+		 * @param ringoPacket RingoPacket to send
+		 * @return DataGram packet to send down the network
+		 */
 		private DatagramPacket createDatagram(byte [] data, RingoPacket ringoPacket) {
 			try {
 				InetAddress dst = InetAddress.getByName(ringoPacket.getDestIP());
@@ -1214,6 +1246,10 @@ public class Ringo implements Runnable {
 			}
 		}
 
+		/**
+		 * Returns a RingoPacket from the packetQueue
+		 * @return 
+		 */
 		private RingoPacket dequeue() {
 			if (!this.packetQueue.isEmpty()) {
 				try {
@@ -1242,6 +1278,10 @@ public class Ringo implements Runnable {
 		}
 	}
 	
+	/**
+	 * Executes a user-provided command, like send
+	 * @author sainaidu
+	 */
 	private class WorkerThread implements Runnable {
 		private Role role;
 		private LinkedBlockingQueue<RingoPacket> sendQueue;
@@ -1304,7 +1344,11 @@ public class Ringo implements Runnable {
 			}
 		}
 		
-		// used by SENDER
+		/**
+		 * Read a file, convert its contents into a series of packets, and send those.
+		 * Used primarily by Sender
+		 * @param filepath File to send
+		 */
 		private void sendFile(String filepath) {
 			File file = new File(filepath);
 			// Hashtable<String, Boolean> windowAckList = new Hashtable<String, Boolean>();
@@ -1379,7 +1423,14 @@ public class Ringo implements Runnable {
 				e.printStackTrace();
 			}
 		}
-				
+		
+		/**
+		 * Convert a chunk of data into a RingoPacket
+		 * @param data File contents to send (partial)
+		 * @param seqNumber Sequence number of Packet
+		 * @param seqLength Length of packet data
+		 * @return RingoPacket to send
+		 */
 		private RingoPacket createSendPacket(byte [] data, int seqNumber, long seqLength) {
 			// need to define a keep-alive method that returns the next host name and port
 			// RingoPacket toSend = new RingoPacket(this.localName, this.localPort, this.keepAlive.nextHost, this.keepAlive.nextPort, 0, seqNumber, PacketType.DATA, this.role, this.ringSize);
@@ -1401,17 +1452,18 @@ public class Ringo implements Runnable {
 			
 			return toSend;
 		}
-		
+		/**
+		 *  if there is a DATA packet in the receiveQueue
+		 *	finishing FORWARDING or RECEIVING entire file
+		 *	if ANY:
+		 *		every time a DATA packet is received, return the "highestSequenceAck"
+		 *		stop when highestSequenceAck is >= seqLength - 1
+		 *	 if RECEIVING:
+		 *		receive DATA packets and store in file object
+		 *	 if FORWARDING:
+		 *		once enough DATA packets to fill up window are acquired, call transmitWindow
+		 */
 		private void transportFile() {
-			// if there is a DATA packet in the receiveQueue
-			// finishing FORWARDING or RECEIVING entire file
-			// if ANY:
-				// every time a DATA packet is received, return the "highestSequenceAck"
-				// stop when highestSequenceAck is >= seqLength - 1
-			// if RECEIVING:
-				// receive DATA packets and store in file object
-			// if FORWARDING:
-				// once enough DATA packets to fill up window are acquired, call transmitWindow
 			// System.out.println("z");
 			
 			String lastRingo = getPrevRingo();
@@ -1574,6 +1626,15 @@ public class Ringo implements Runnable {
 			}
 		}
 		
+		/**
+		 * Pull data from File Output stream (that came originally from Packets) and 
+		 * contents into the file.
+		 * This is called by the receiver.
+		 * 
+		 * The output file will be the same as the one originally sent, but the name will have an "-received" appended.
+		 * 
+		 * @param fileName Name of the file to write
+		 */
 		private void writeFile(String fileName) {
 			FileOutputStream fop = null;
 			File writeFile;
@@ -1609,6 +1670,15 @@ public class Ringo implements Runnable {
 			}
 		}
 		
+		/**
+		 * Finds the highest continuous ACK'd series in the window,
+		 * starting from 0.
+		 * 
+		 * If, for example, packets 2, 3, 4, and 5 were ACK'd,
+		 * this method would return -1, as 0 was never ACK'd.
+		 * @param accepted
+		 * @return ACK number to send back to sender
+		 */
 		private int getAckNum(boolean [] accepted) {
 			/*while (ackNum < accepted.length && accepted[ackNum] != false) {
 				ackNum++;
@@ -1623,6 +1693,12 @@ public class Ringo implements Runnable {
 			return accepted.length - 1;
 		}
 		
+		/**
+		 * Create an ACK packet
+		 * @param base Packet to respond to
+		 * @param ackNum ACK number to include in output packet
+		 * @return new RingoPacket to send to other Ringo
+		 */
 		private RingoPacket createAck(RingoPacket base, int ackNum) {
 			RingoPacket ack = new RingoPacket(this.localName, this.localPort, base.getSourceIP(), base.getSourcePort(), base.getSequenceLength(), ackNum, PacketType.DATA_ACK, this.role, 0);
 			return ack;
@@ -1643,7 +1719,10 @@ public class Ringo implements Runnable {
 			return "";
 		}
 		
-		// gets next ringo in route arraylist
+		/**
+		 * Pulls the next Ringo in the Route
+		 * @return hostname:port of the next Ringo in the route.
+		 */
 		private String getNextRingo() {			
 			for (int i = 0; i < this.route.size() - 1; i++) {
 				if (this.route.get(i).equals(this.localName + ":" + this.localPort)) {
@@ -1797,6 +1876,10 @@ public class Ringo implements Runnable {
 			return highestAck;
 		}
 		
+		/**
+		 * Checks to see if the window was sent before the timeout.
+		 * @author sainaidu
+		 */
 		private class WindowTimerTask extends TimerTask {
 			private String name;
 			private LinkedBlockingQueue<Boolean> done;
