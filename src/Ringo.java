@@ -53,6 +53,7 @@ public class Ringo implements Runnable {
 	private KeepAlive keepalive;
 	private Thread keepAliveThread;
 	private boolean initialized;
+	private int delay;
 
 	/**
 	 * The constructor accepts all of the command-line arguments specified in the
@@ -100,6 +101,7 @@ public class Ringo implements Runnable {
 		this.keepAliveQueue = new LinkedBlockingQueue<RingoPacket>();
 		this.factory = new RingoPacketFactory(localName, localPort, role, ringSize);
 		this.initialized = false;
+		this.delay = 0;
 	}
 
 	/**
@@ -234,7 +236,7 @@ public class Ringo implements Runnable {
 		worker.start();
 
 		while (true) {
-			System.out.println("Enter any of the following commands: send, show-matrix, show-ring, show-next, disconnect");
+			System.out.println("Enter any of the following commands: send, show-matrix, show-ring, show-next, offline, disconnect");
 			String command = "";
 
 			Scanner scanner = new Scanner(System.in);
@@ -250,7 +252,13 @@ public class Ringo implements Runnable {
 			}
 
 			if (command.split(" ")[0].equalsIgnoreCase("offline")) {
-				System.out.println("\n");
+				if (command.split(" ").length < 2) {
+					System.out.println("Please provide a parameter to offline");
+				} else {
+					int delay = Integer.parseInt(command.split(" ")[1]);
+					if (delay > 0)
+						this.delay = delay * 1000;
+				}
 			} else if (command.split(" ")[0].equalsIgnoreCase("send")) {
 				if (this.role != Role.SENDER) {
 					System.out.println("Unfortunately this is not a SENDER ringo; Try again from the SENDER ringo");
@@ -1172,6 +1180,15 @@ public class Ringo implements Runnable {
 
 		public void run() {
 			while(true) {
+				if (Ringo.this.delay > 0) {
+					try {
+						Thread.sleep(Ringo.this.delay);
+						Ringo.this.delay = 0;
+						packetQueue.clear();
+					} catch (Exception e) {
+						// silent fail
+					}
+				}
 				RingoPacket packet = dequeue();
 				if (packet != null) {
 					// System.out.println("current time start: " +System.currentTimeMillis());
