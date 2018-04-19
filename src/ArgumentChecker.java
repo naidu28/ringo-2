@@ -1,5 +1,12 @@
 import java.util.function.Function;
 
+/**
+ * Checks an argument by first changing the tested value to something checkable, and then running the final test
+ * @author andrewray
+ *
+ * @param <T> Type of argument
+ * @param <R> Type of mutated argument
+ */
 class ArgumentChecker<T, R> {
 	
 	Function<T, R> mutator;

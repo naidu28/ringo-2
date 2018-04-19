@@ -6,6 +6,12 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.LinkedBlockingQueue;
 
+/**
+ * Class responsible for tracking the KeepAlive status for each Ringo, and updating the Tracker. 
+ * This class does not schedule the updating on its own.
+ * @author andrewray
+ *
+ */
 public class KeepAlive implements Runnable {
 	public static final int KEEPALIVE_DELAY_MILLIS = 4000;
 	
@@ -17,6 +23,13 @@ public class KeepAlive implements Runnable {
 	private TimerTask keepAliveTimer;
 	private Timer timer;
 	
+	/**
+	 * 
+	 * @param inq  Queue to pull KeepAlive packets from
+	 * @param outq Queue to put KeepAlive Responses into
+	 * @param factory Object that simplifies the RingoPacket constructor
+	 * @param tracker Tracker to notify with new Ringo States
+	 */
 	public KeepAlive(LinkedBlockingQueue<RingoPacket> inq, LinkedBlockingQueue<RingoPacket> outq, RingoPacketFactory factory, RingTracker tracker) {
 		this.inq = inq;
 		this.outq = outq;
@@ -61,6 +74,14 @@ public class KeepAlive implements Runnable {
 		return new ArrayList<HostInformation>(times.keySet());
 	}
 	
+	/**
+	 * Scheduled task called by the KeepAliveTimerTask,
+	 * checks the the last time this Ringo got a KeepAlive
+	 * request from another Ringo, and sets its state accordingly.
+	 * 
+	 * Next, this updates the tracker with the new Status,
+	 * and updates the ring in the Tracker.
+	 */
 	public void update() {
 		ArrayList<HostInformation> stale = new ArrayList<>();
 		long staleTime = System.currentTimeMillis() - 2*KEEPALIVE_DELAY_MILLIS;
