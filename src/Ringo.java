@@ -127,6 +127,14 @@ public class Ringo implements Runnable {
 				packet = new RingoPacket(this.localName, this.localPort, this.pocName, this.pocPort, 0, 0, PacketType.PING_REQ, this.role, this.ringSize);
 				sendQueue.add(packet);
 				responseIn = this.takeType(recvQueue, PacketType.PING_RES);
+				try {
+					Thread.sleep(200);
+				} catch (Exception e) {
+					
+				}
+				
+				// System.out.println("recvqueue: " +this.recvQueue);
+				// System.out.println("sendqueue: " +this.sendQueue);
 			}
 		}
 		
@@ -294,7 +302,7 @@ public class Ringo implements Runnable {
 		} else {
 			converged.put(this.localName+":"+this.localPort, true);
 		}
-
+		
 		if (this.pocName != "0" && this.pocPort != 0) {
 			this.lsa.put(this.pocName+":"+this.pocPort, 1);
 			converged.put(this.pocName+":"+this.pocPort, false);
@@ -305,6 +313,8 @@ public class Ringo implements Runnable {
 		}
 
 		while (!isLsaConverged(converged)) {
+			// System.out.println("recvqueue: " +this.recvQueue);
+			// System.out.println("sendqueue: " +this.sendQueue);
 			// listen for responses from all nodes
 			// and respond with corresponding LSA vectors
 			if (!converged.get(this.localName+":"+this.localPort)) {
@@ -324,7 +334,7 @@ public class Ringo implements Runnable {
 					} catch (Exception e) {
 						System.out.println(e);
 					}
-
+					
 					System.out.println(this.lsa);
 					// System.out.println("send queue: " +sendQueue);
 					// System.out.println("recv queue: " +recvQueue);
@@ -336,15 +346,7 @@ public class Ringo implements Runnable {
 						RingoPacket response = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.LSA, this.role, this.ringSize);
 						response.setLsa(this.lsa);
 						
-						RingoPacket response1 = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.LSA, this.role, this.ringSize);
-						response1.setLsa(this.lsa);
-						
-						RingoPacket response2 = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.LSA, this.role, this.ringSize);
-						response2.setLsa(this.lsa);
-						
 						sendQueue.add(response);
-						sendQueue.add(response1);
-						sendQueue.add(response2);
 					}
 
 				} catch (Exception e) {
@@ -378,15 +380,7 @@ public class Ringo implements Runnable {
 							RingoPacket packet = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.LSA_COMPLETE, this.role, this.ringSize);
 							packet.setLsa(this.lsa);
 							
-							RingoPacket packet1 = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.LSA_COMPLETE, this.role, this.ringSize);
-							packet1.setLsa(this.lsa);
-							
-							RingoPacket packet2 = new RingoPacket(this.localName, this.localPort, key.substring(0, key.indexOf(":")), Integer.parseInt(key.substring(key.indexOf(":") + 1)), 0, 0, PacketType.LSA_COMPLETE, this.role, this.ringSize);
-							packet2.setLsa(this.lsa);
-							
 							sendQueue.add(packet);
-							sendQueue.add(packet1);
-							sendQueue.add(packet2);
 						}
 					}
 				} catch (Exception e) {
@@ -1085,10 +1079,12 @@ public class Ringo implements Runnable {
 				RingoPacket packet = dequeue();
 				if (packet != null) {
 					// System.out.println("current time start: " +System.currentTimeMillis());
-					if (packet.getType() == PacketType.DATA) {
+					if (packet.getType() == PacketType.DATA || packet.getType() == PacketType.DATA_ACK) {
 						// System.out.println("Sent DATA packet sequence number: " +packet.getSequenceNumber());
+					} else {
+						// replaceDuplicates(packet);
 					}
-					// replaceDuplicates(packet);
+					
 					packet.setStartTime(System.currentTimeMillis());
 					byte [] data = RingoPacket.serialize(packet);
 					DatagramPacket udpPacket = createDatagram(data, packet);
