@@ -21,6 +21,7 @@ Files:
 Instructions:
   * Have Java 8 installed on your machine
   * Run "java -jar ringo.jar <flag> <local-port> <PoC-name> <PoC-port> <N>"
+  * If no jarfile is available, run "java App.java <flag> <local-port> <PoC-name> <PoC-port> <N>"
 
 Bugs/Limitations:
   * Network initialization usually takes around 30 seconds
